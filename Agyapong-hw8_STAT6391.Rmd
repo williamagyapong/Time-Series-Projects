@@ -1,0 +1,603 @@
+---
+title: '`r params$hw_title`'
+subtitle: "Time Series Analysis (STAT 6391) "
+author: 
+ - Willliam Ofosu Agyapong^[woagyapong@miners.utep.edu, PhD Data Science, University of Texas at El Paso (UTEP).]
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  bookdown::pdf_document2:
+    fig_caption: true
+    keep_tex: yes
+    latex_engine: xelatex
+    number_sections: no
+    toc: false
+    # toc_depth: 4
+    extra_dependencies: "subfig"
+header-includes:
+- \usepackage{amsmath}
+- \usepackage{amssymb}
+- \usepackage{amsfonts}
+- \usepackage{amsthm}
+- \usepackage{esvect}
+- \usepackage{floatrow}
+- \usepackage{float}
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhf{}
+- \rhead{William O. Agyapong}
+- \lhead{`r params$hw_title`}
+- \cfoot{\thepage}
+- \usepackage{algorithm}
+- \usepackage[noend]{algpseudocode}
+geometry: margin = 1in
+fontsize: 10pt
+params:
+  hw_title: Homework 8
+bibliography: ../references.bib
+link-citations: yes
+linkcolor: blue
+nocite: | 
+    @shumway2019time
+ 
+---
+
+
+```{r setup, include=FALSE}
+# Set global options for output rendering
+knitr::opts_chunk$set(eval = T, echo = F, warning = F, message = F, 
+                      fig.pos = "H", out.extra = "", fig.align = "center",
+                      cache = F, comment="")
+
+#----------------- Load required packages
+# library(dplyr)
+library(knitr)
+library(kableExtra)
+# library(broom)
+library(stats)
+library(astsa)
+
+  
+#----------------- set the current working directory to the file path
+setwd(dirname(rstudioapi::getSourceEditorContext()$path)) 
+
+
+```
+
+
+
+
+<!-- \noindent\rule{17.5cm}{0.8pt} -->
+
+\newpage
+
+# Problem 5.4 
+
+We fit an ARIMA(p,d,q) model to `gtemp_land`, the land-based global temperature data, and perform all of the necessary diagnostics; including a model choice analysis. 
+
+
+```{r fig54a, out.width="50%", fig.ncol=2, fig.cap="Exploring the land-based global temperature data.", fig.subcap=c("Annual temperature anomalies (in degress centigrade) averaged over the Earth's land area from 1880 to 2021.", 'Sample ACF of the growth rate')}
+
+##--------- Problem 5.4 codes
+
+# plot the original series data
+xt <- gtemp_land 
+tsplot(xt, col=4, ylab = "Prices in dollars per barrel")
+
+sample_acf <- acf1(xt, main = "") 
+
+```
+
+
+ The series exhibits a strong non-linear trend. We see a sign of slow decay in the sample ACF, suggesting that an ARIMA model is an appropriate choice to consider.
+ 
+Based on our initial observations about the data, we decided that differencing the data will be helpful. Plot (a) in Figure \@ref(fig:fig54b) shows a time series plot of the differenced data of order 1 (d=1), which shows that differencing the data resulted in a stable process.  
+
+To decide on the appropriate choice of p and q for the ARIMA model to start with, we generated sample ACF and PACF plots as shown in Figure \@ref(fig:fig54b). The ACF appears to be tailing off while the PACF cuts off at lag 3 which suggests an ARMA(3,0) to the differenced data or ARIMA(3,1,0) to the actual data. It is also not unreasonable to assume that the ACF is cutting off after lag 1, and if we further assume that the PACF is tailing off, then this will suggest an ARMA(0,1) or MA(1) to the differenced series. 
+
+
+
+```{r fig54b, out.width="50%", fig.ncol=2, fig.cap="Exploring the first differenced series of the land-based global temperature data.", fig.subcap=c('First differenced series of the land-based global temperature.', 'Sample ACF', 'Sample PACF')}
+# plot of the first differenced series
+xt_diff <- diff(xt)
+tsplot(xt_diff, ylab = "growth rate", col = 4)
+abline(h=mean(xt_diff), col=6)
+
+sample_acf <- acf1(xt_diff, main = "")
+sample_pacf <- acf1(xt_diff, pacf = T, main = "")
+```
+
+
+## Parameter Estimation
+
+The foregoing analysis suggested two candidate models, ARIMA(3,0,0) or AR(3) and ARIMA(0,0,1) or MA(1) for the differenced series. 
+The mean of the differenced series is slightly above zero so we fitted models with constant terms. 
+
+Results in Tables \@ref(tab:ar3-estimation) and \@ref(tab:ma1-estimation)show that all the regression coefficients including the constant term are significant (associated p-values are less than 5%). 
+
+
+
+```{r "ar3-estimation"}
+ar3 <- sarima(xt_diff, 3,0,0, details = F) # AR(3) on differenced series
+
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    ar3$ttable,
+    c(ar3$fit$sigma2, rep(NA, 3)),
+    c(ar3$AIC, rep(NA, 3)),
+    c(ar3$AICc, rep(NA, 3)),
+    c(ar3$BIC, rep(NA, 3))
+)) 
+rownames(result_tbl) <- c("AR1", "AR2", "AR3", "Constant", "Sigma^2", "AIC", "AICc", "BIC")
+
+## display table of results 
+options(knitr.kable.NA='')  # suppress NAs from table output
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "lcccc", digits=4,
+          caption = "Parameter estimates and performance metrics for ARIMA(3,0,0)  on the land-based global temperature data.", na="") |>
+    pack_rows("Coefficients", 1, 4) |>
+    pack_rows("Performance metrics", 5, 8) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+
+
+```{r "ma1-estimation"}
+ma1 <- sarima(xt_diff, 0,0,1, details = F) # MA(3) on differenced series
+
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    ma1$ttable,
+    c(ma1$fit$sigma2, rep(NA, 3)),
+    c(ma1$AIC, rep(NA, 3)),
+    c(ma1$AICc, rep(NA, 3)),
+    c(ma1$BIC, rep(NA, 3))
+)) 
+# rownames(result_tbl) <- c("MA1", "MA2", "MA3", "Constant", "Sigma^2", "AIC", "AICc", "BIC")
+rownames(result_tbl) <- c("MA1", "Constant", "Sigma^2", "AIC", "AICc", "BIC")
+
+
+## display table of results 
+options(knitr.kable.NA='')  # suppress NAs from table output
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "lcccc", digits=4,
+          caption = "Parameter estimates and performance metrics for ARIMA(0,0,1)  on the land-based global temperature data.", na="") |>
+    pack_rows("Coefficients", 1, 2) |>
+    pack_rows("Performance metrics", 3, 6) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+
+
+
+## Residual Diagnostics
+
+Residual analysis results for the models considered are shown in Figures \@ref(fig:fig54-ar) and \@ref(fig:fig54-ma). There is no signs of departures from the model assumptions as the residuals look white (because the ACF of the residuals fall within the confidence bands and the Ljung-Box statistic p-values are all above the 5\% significance level) and the distribution of the residuals looking reasonably normal. 
+
+```{r fig54-ar, fig.cap="Residual analysis for the fitted ARMA(3,0) model"}
+ar32 <- capture.output(sarima(xt_diff, 3,0,0)) # suppress convergence output
+
+```
+
+```{r fig54-ma, fig.cap="Residual analysis for the fitted ARMA(0,1) model"}
+
+ma12 <- capture.output(sarima(xt_diff, 0,0,1))
+
+```
+
+
+## Model Choice Analysis 
+
+Results in \@ref(tab:p54-model-choice) are presented for model comparison. 
+
+```{r "p54-model-choice"}
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    
+    c(ar3$AIC, ar3$AICc, ar3$BIC),
+    c(ma1$AIC, ma1$AICc, ma1$BIC)
+)) 
+names(result_tbl) <- c("AIC", "AICc", "BIC")
+rownames(result_tbl) <- c("ARMA(3,0)", "ARMA(0,1)")
+
+## display table of results 
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "ccc", digits=4,
+          caption = "Performance metrics for ARMA models for the differenced land-based global temperature series") |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+
+According to all three metrics, the ARMA(0,1) or MA(1) fit is preferred. The ARMA(3,0) is appears to fit the data quite well, however, for a more parsimonious model, we conclude that an ARMA(0,1) model for the differenced land-based global temperature series or an ARIMA(0,1,1) to the actual land-based gloval temperature series is most appropriate.
+
+
+## Forecasting 
+
+<!-- The forecasts shows increasing behavior with sharp increase in  -->
+We then forecast the next 10 years land-based global temperature using the ARIMA(0,1,1) model selected as shown in Figure \@ref(fig:p54-forecast). The forecasts for the 10 years ahead were obtained as 1.387786, 1.401660, 1.415535, 1.429410, 1.443285 1.457160, 1.471035, 1.484910, 1.498784, and 1.512659. These forecasts are represented by the red circles in the Figure. We see that the forecasts increased with increasing years.
+
+```{r "p54-forecast", fig.cap="Next 10 years forecasts of the land-based global temperature series using the selected ARIMA(0,1,1) maodel"}
+gtemp_land_for <- sarima.for(gtemp_land, n.ahead=10, 0,1,1, no.constant = F)
+abline(h=0, col=4) # display the zero mean
+```
+
+
+
+# Problem 5.6
+
+This problem considers the sulfur dioxide series, `so2` available in the `atsa` R package. The goal is to obtain an appropriate ARIMA($p,d,q$) model for the series and then use the resulting model to forecast the data into the future four time periods ahead (about one month) and calculate 95\% prediction intervals for each of the four forecasts. 
+
+As usual, we begin by exploring the series and performing some preliminary analysis to guide the whole model building process. 
+
+The differenced series looks like a stable process with zero mean. Look at the P/ACF plots, we can see that the ACF is cutting off at lag 3 and the PACF is tailing off. It is also reasonable to assume that the ACF tails off while the PACF cuts of at lags below 6.
+
+
+
+```{r fig56a, out.width="50%", fig.ncol=2, fig.cap="Exploring the actual sulfur dioxide series and its first differenced series.", fig.subcap=c("Original sulfur series", 'Sample ACF of the sulfur series', 'Differenced sulfur series',  'Sample ACF and PACF of the differenced series')}
+
+##--------- Problem 5.6 codes
+
+# plot the original series data
+ 
+tsplot(so2, col=4, ylab = "Sulfur dioxide series")
+
+sample_acf <- acf1(so2) 
+
+# plot of the first differenced series
+so2_diff <- diff(so2)
+tsplot(so2_diff, ylab = "", col = 4)
+abline(h=mean(so2_diff), col=6)
+
+
+par(mfrow=c(2,1))
+sample_acf <- acf1(so2_diff, main = "")
+sample_pacf <- acf1(so2_diff, pacf = T, main = "")
+
+```
+
+
+## Parameter Estimation
+
+The foregoing analysis suggested three candidate models, ARMA(3,0) or AR(3),  ARMA(0,1) or MA(1) and ARMA(0,3) or MA(3) for the differenced series. 
+
+
+Results in Tables \@ref(tab:ar3-2-estimation) and \@ref(tab:arma042-estimation) and show that all the regression coefficients excluding the constant term are significant (associated p-values are less than 5%). However, for the ARMA(0,3) model, only the MA1 parameter is significant (See \@ref(tab:arma05-estimation)). The non-significant constant terms shows that the mean of the series is zero as we observed from the time series plot of the differenced data.
+
+
+
+```{r "ar3-2-estimation"}
+ar3 <- sarima(so2_diff, 3,0,0, details = F, no.constant = F) # AR(3) on differenced series
+
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    ar3$ttable,
+    c(ar3$fit$sigma2, rep(NA, 3)),
+    c(ar3$AIC, rep(NA, 3)),
+    c(ar3$AICc, rep(NA, 3)),
+    c(ar3$BIC, rep(NA, 3))
+)) 
+rownames(result_tbl) <- c("AR1", "AR2", "AR3", "Constant", "Sigma^2", "AIC", "AICc", "BIC")
+
+## display table of results 
+options(knitr.kable.NA='')  # suppress NAs from table output
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "lcccc", digits=4,
+          caption = "Parameter estimates for ARMA(3,0)", na="") |>
+    pack_rows("Coefficients", 1, 4) |>
+    pack_rows("Performance metrics", 5, 8) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+
+```{r "arma042-estimation"}
+
+# try MA 1 or 2
+arma04 <- sarima(so2_diff, 0,0,1, details = F, no.constant = F) 
+
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    arma04$ttable,
+    c(arma04$fit$sigma2, rep(NA, 3)),
+    c(arma04$AIC, rep(NA, 3)),
+    c(arma04$AICc, rep(NA, 3)),
+    c(arma04$BIC, rep(NA, 3))
+)) 
+rownames(result_tbl) <- c("MA1", "Constant", "Sigma^2", "AIC", "AICc", "BIC")
+
+## display table of results 
+options(knitr.kable.NA='')  # suppress NAs from table output
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "lcccc", digits=4,
+          caption = "Parameter estimates for ARMA(0,1)", na="") |>
+    pack_rows("Coefficients", 1, 2) |>
+    pack_rows("Performance metrics", 3, 6) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+
+
+```{r "arma05-estimation"}
+arma05 <- sarima(so2_diff, 0,0,3, details = F, no.constant = F) 
+
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    arma05$ttable,
+    c(arma05$fit$sigma2, rep(NA, 3)),
+    c(arma05$AIC, rep(NA, 3)),
+    c(arma05$AICc, rep(NA, 3)),
+    c(arma05$BIC, rep(NA, 3))
+)) 
+rownames(result_tbl) <- c("MA1", "MA2", "MA3", "Constant", "Sigma^2", "AIC", "AICc", "BIC")
+
+## display table of results 
+options(knitr.kable.NA='')  # suppress NAs from table output
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "lcccc", digits=4,
+          caption = "Parameter estimates for ARMA(0,3)", na="") |>
+    pack_rows("Coefficients", 1, 4) |>
+    pack_rows("Performance metrics", 5, 8) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+
+```
+
+
+
+## Residual Diagnostics
+
+Figures \@ref(fig:fig56b), \@ref(fig:fig56c), and \@ref(fig:fig56d) show residual analysis for the three candidate models considered.
+
+
+```{r fig56b, fig.cap="Residual analysis for the fitted ARMA(3,0) model"}
+ar32 <- capture.output(sarima(so2_diff, 3,0,0)) # suppress convergence output
+```
+
+```{r fig56c, fig.cap="Residual analysis for the fitted ARMA(0,1) model"}
+arma042 <- capture.output(sarima(so2_diff, 0,0,1))
+```
+
+```{r fig56d, fig.cap="Residual analysis for the fitted ARMA(0,3) model"}
+arma052 <- capture.output(sarima(so2_diff, 0,0,3))
+```
+
+
+The residuals analysis for the two MA models to the differenced data look much decent compared to those for the AR model. To account for possibly additional autocorrelation remaining, we added another MA parameters (q=2,3) but the results (not shown) were not substantially different.
+
+## Model Choice Analysis 
+
+
+```{r "p56-model-choice"}
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    
+    c(ar3$AIC, ar3$AICc, ar3$BIC),
+    c(arma04$AIC, arma04$AICc, arma04$BIC),
+    c(arma05$AIC, arma05$AICc, arma05$BIC)
+)) 
+
+names(result_tbl) <- c("AIC", "AICc", "BIC")
+rownames(result_tbl) <- c("ARMA(3,0)", "ARMA(0,1)", "ARMA(0,3)")
+
+## display table of results 
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "ccc", digits=4,
+          caption = "Performance metrics for ARMA models for the differenced land-based global temperature series") |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+
+According to all three metrics, the ARMA(0,1) or MA(1) fit is preferred even though the performance are quite close among the three models. Thus, we conclude that an ARMA(0,1) model for the differenced sulfur dioxide series or an ARIMA(0,1,1) to the actual sulfur series is the best model.
+
+
+Finally, we forecast the sulfur dioxide data into the future four time periods ahead (about one month) and calculate 95\% prediction intervals for each of the four forecasts as shown in \@ref(fig:p56-forecast). Note that we fitted the selected model without a constant term because it was found to insignificant. The four forecasts are about the same with approximate value **1.83**, but with slight increase in variance as depicted by the 95\% confidence band. 
+
+```{r "p56-forecast", fig.cap="forecasts for the sulfur dioxide data into the future four time periods ahead (about one month) and calculated 95\\% prediction bands."}
+arma04_for <- sarima.for(so2, n.ahead=4, 0,1,1, details = F, no.constant = T)
+abline(h=0, col=4) # display the zero mean
+```
+
+
+# Problem 5.11
+
+We aim to fit a seasonal ARIMA model to the U.S. Live Birth Series, `birth`, available in the `astsa` package. We begin the analysis with initial exploration of the data to help choose appropriate values for the parameters of the ARIMA model. 
+
+
+```{r fig5-11a, out.width="50%", fig.ncol=2, fig.cap="Exploring the actual US Live Birth Series and its first differenced series.", fig.subcap=c("Original Live Birth Series", 'Sample ACF of the Live Birth series', 'Differenced Live Birth series',  'Sample ACF and PACF of the differenced series')}
+
+##--------- Problem 5.11 codes
+
+# plot the original series data
+ 
+tsplot(birth, col=4, ylab = "live birth")
+
+sample_acf <- acf1(birth) 
+
+# plot of the first differenced series
+birth_diff <- diff(birth)
+birth_diff <- diff(diff(birth, 12))
+tsplot(birth_diff, ylab = "", col = 4)
+abline(h=mean(birth_diff), col=6)
+
+
+par(mfrow=c(2,1))
+sample_acf <- acf1(birth_diff, main = "")
+sample_pacf <- acf1(birth_diff, pacf = T, main = "")
+
+```
+
+Looking at the sample ACF and PACF of the differenced data at the first few lags, it appears as though the ACF is cutting off at lag 1, while the PACF is tailing off, suggesting an MA(1) within the seasons. Based on this result, an ARIMA(0,1,1) $\times (0,1,1)_{12}$ on the US Live Birth data appears to be a reasonable choice. Parameter estimates from a fit of the chosen model are given in \@ref(tab:p56-param-est).
+
+
+```{r p56-param-est}
+sarima_mod <- sarima(birth, p=0,d=1,q=1, P=0, D=1, Q=1, S=12, details = F) #p=1,P=1, (0,1)
+
+
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    sarima_mod$ttable,
+    c(sarima_mod$fit$sigma2, rep(NA, 3)),
+    c(sarima_mod$AIC, rep(NA, 3)),
+    c(sarima_mod$AICc, rep(NA, 3)),
+    c(sarima_mod$BIC, rep(NA, 3))
+)) 
+rownames(result_tbl) <- c("MA1", "SMA1", "Sigma^2", "AIC", "AICc", "BIC")
+
+## display table of results 
+options(knitr.kable.NA='')  # suppress NAs from table output
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "lcccc", digits=4,
+          caption = "Parameter estimates model for the ARIMA(0,1,1)x(0,1,1) with S=12 on the differenced US Live Birth data.", na="") |>
+    pack_rows("Coefficients", 1, 3) |>
+    pack_rows("Performance metrics", 4, 6) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+The residual analysis displayed in Figure \@ref(fig:fig56-diag) look decent except that the p-values for Ljung-Box statistic fall slightly below the 5\% significant level threshold.
+
+```{r fig56-diag, fig.cap="Residual analysis for the chosen seasonal ARIMA model" }
+
+dd <- capture.output(sarima(birth, p=0,d=1,q=1, P=0, D=1, Q=1, S=12))
+```
+
+
+We now used the estimated model to forecast the next 12 months of live Births.
+The forecasts rise and fall over the 12 months. 
+
+```{r p5-11-forecast}
+sarima_for <- sarima.for(birth, 12, p=0,d=1,q=1, P=0, D=1, Q=1, S=12)
+```
+
+
+# Problem 5.16 
+
+## Part (a)
+
+We fitted a dummy variable ordinary regression of recruitment. Plots of the sample ACF and PACF of the residuals are presented in \@ref(fig:fig5-16a), which indicate that an AR(2) model for the residual process might be appropriate since the ACF is tailing off and the PACF is cutting off after lag 2. 
+
+
+```{r fig5-16a, out.width="50%", fig.cap="Sample ACF and PACF ofthe residuals from the OLS fit.", fig.ncol=2, fig.subcap=c('Time series plot of the residuals', 'Sample ACF and PACF')}
+
+#---------- Problem 5.6 codes
+
+library(zoo) 
+dummy = ifelse(soi<0, 0, 1)
+fish <- as.zoo(ts.intersect(rec, soiL6=lag(soi,-6), dL6=lag(dummy,-6)))
+fish_fit <- lm(rec~ soiL6*dL6, data=fish, na.action=NULL)
+# summary(fish_fit)
+fish_resid <- resid(fish_fit) 
+
+tsplot(time(fish), fish_resid)
+sample_acf <- acf2(fish_resid, main = "")
+# sample_pacf <- acf1(fish_resid, pacf = T)
+```
+
+
+## Part (b)
+
+We fitted the dummy variable regression model assuming that the noise is correlated noise by fitting an AR(2) identified in part (a) for the residual process using `sarima()` from the `astsa` package. 
+
+The residual analysis results in Figure \@ref(fig:fig5-16a) looks good except for the presence of about two outliers (those observations in the standardized residuals plot exceeding 3 standard errors in magnitude). This signifies that the model adequately fit the data.
+
+```{r fig5-16a2, fig.cap="Residual analysis."}
+soiL6 <- fish$soiL6
+dL6 <- fish$dL6
+dd<-capture.output(sarima(fish$rec, 2, 0, 0, xreg = cbind(soiL6, dL6, soiL6*dL6)))
+```
+
+
+
+
+The parameter estimates with the corresponding standard errors are reported in Table \@ref(tab:corr-mod-param). The noise variance  ($\sigma^2$) was estimated as 89.8.
+
+Comparing the results in Table \@ref(tab:corr-mod-param) to the results of Example 3.14 in [@shumway2019time], we see that the estimates here have smaller standard errors (with the exception of the intercept), showing an improvement in performance over the initial model in EXample 3.14.
+
+
+
+```{r corr-mod-param}
+cor_mod <- sarima(fish$rec, 2, 0, 0, xreg = cbind(soiL6, dL6, soiL6*dL6), details = F)
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    cor_mod$ttable
+    # c(cor_mod$fit$sigma2, rep(NA, 3)),
+    # c(cor_mod$AIC, rep(NA, 3)),
+    # c(cor_mod$AICc, rep(NA, 3)),
+    # c(cor_mod$BIC, rep(NA, 3))
+)) 
+rownames(result_tbl) <- c("AR1", "AR2", "Intercept", "soiL6", "dL6", "soiL6 * dL6")
+
+## display table of results 
+options(knitr.kable.NA='')  # suppress NAs from table output
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "lcccc", digits=4,
+          caption = "Parameter estimates for the dummy variable regression model with AR(2)", na="") |>
+    # pack_rows("Coefficients", 1, 4) |>
+    # pack_rows("Performance metrics", 5, 8) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+
+
+## Part (c)
+
+Here, we fitted a seasonal model of the form ARIMA(2,0,0)$\times (1,0,0)_{12}$ for the noise in the previous part and the parameter estimates for the model are displayed in \@ref(tab:sarima-estimation). All the model parameters are statistically significant. The residual analysis shown in \@ref(fig:fig5-16c) look decent, indicating adequate model fit to the data.
+
+<!-- We first plotted the sample ACF and PACF of the noise which are presented in \@ref(fig:fig5-16b). While the ACF appears tailing off, the PACF appears cutting of at lag 1 for every season (12 months). -->
+
+```{r "sarima-estimation"}
+sarima_mod2 <- sarima(fish$rec, 2, 0, 0, P=1, D=0, Q=0, S=12, 
+       xreg = cbind(soiL6, dL6, soiL6*dL6), details = F) 
+
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    sarima_mod2$ttable,
+    c(sarima_mod2$fit$sigma2, rep(NA, 3)),
+    c(sarima_mod2$AIC, rep(NA, 3)),
+    # c(sarima_mod2$AICc, rep(NA, 3)),
+    c(sarima_mod2$BIC, rep(NA, 3))
+)) 
+
+rownames(result_tbl) <- c("AR1", "AR2", "SAR1", "Intercept", "soiL6", "dL6", "soiL6 * dL6", "Sigma^2", "AIC", "BIC")
+
+
+## display table of results 
+options(knitr.kable.NA='')  # suppress NAs from table output
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "lcccc", digits=4,
+          caption = "Parameter estimates", na="") |>
+    pack_rows("Coefficients", 1, 7) |>
+    pack_rows("Performance metrics", 8, 10) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+
+
+```
+
+```{r fig5-16c, out.width="75%", fig.cap="Sample ACF and PACF of the noise from part (b)"}
+
+dd <- capture.output(sarima(fish$rec, 2, 0, 0, P=1, D=0, Q=0, S=12, 
+       xreg = cbind(soiL6, dL6, soiL6*dL6)))
+```
+
+
+
+
+
+
+\newpage
+
+<!-- - Robert H. Shumway, & David S. Stoffer. (2019). Time Series: A Data Analysis Approach Using R. -->
+
+# Appendix R Codes for the Analysis {-}
+<!-- all R codes are extracted into this chunk -->
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```
+
+
+# References{-} 
+
+
+
+
+
+
+

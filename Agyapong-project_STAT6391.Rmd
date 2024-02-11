@@ -1,0 +1,508 @@
+---
+title: '`r params$hw_title`'
+subtitle: "Time Series Analysis (STAT 6391) "
+author: 
+ - Willliam Ofosu Agyapong^[woagyapong@miners.utep.edu, PhD Data Science, University of Texas at El Paso (UTEP).]
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  bookdown::pdf_document2:
+    fig_caption: true
+    keep_tex: yes
+    latex_engine: xelatex
+    number_sections: yes
+    toc: false
+    # toc_depth: 4
+    extra_dependencies: "subfig"
+header-includes:
+- \usepackage{amsmath}
+- \usepackage{amssymb}
+- \usepackage{amsfonts}
+- \usepackage{amsthm}
+- \usepackage{esvect}
+- \usepackage{floatrow}
+- \usepackage{float}
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhf{}
+- \rhead{William O. Agyapong}
+- \lhead{`r params$hw_title`}
+- \cfoot{\thepage}
+- \usepackage{algorithm}
+- \usepackage[noend]{algpseudocode}
+geometry: margin = 1in
+fontsize: 10pt
+params:
+  hw_title: Time Series Analysis of Bikeshare Rentals 
+bibliography: ../homeworks/references.bib
+link-citations: yes
+linkcolor: blue
+nocite: | 
+    @shumway2019time
+ 
+---
+
+
+```{r setup, include=FALSE}
+# Set global options for output rendering
+knitr::opts_chunk$set(eval = T, echo = F, warning = F, message = F, 
+                      fig.pos = "H", out.extra = "", fig.align = "center",
+                      cache = F, comment="")
+
+#----------------- Load required packages
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+# library(broom)
+library(stats)
+library(astsa)
+
+
+  
+#----------------- set the current working directory to the file path
+setwd(dirname(rstudioapi::getSourceEditorContext()$path)) 
+
+
+# reset ggplot theme
+theme_set(theme_bw())
+```
+
+\newpage 
+
+<!-- # Background -->
+
+<!-- Bike sharing systems has become one of the major means of transportation in major cities in the U.S. and around the world. It is great for quick trips around town or leisurely rides through parks. People use it to commute to work or school, run errands and explore cities. According to Alissa Walker, urbanism editor at [Curbed](https://archive.curbed.com/authors/alissa-walker), Bike share has been one of the major success stories in the US transportation system over the last decade. Annual bike-share data from the NACTO indicates that more than 119 U.S. communities now operate bike-share systems, beginning with Tulsa, Oklahoma's program in 2007. Bike share has been proved in studies to increase transit ridership and may even be safer than using personal bikes, since bicycle share schemes raise biker visibility, making riding safer for everyone.  -->
+
+<!-- Regarding how the system operates, users commonly check out a bike with a membership or credit/debit card. They can then ride to their destination and leave the bike at a docking station nearby. Bike-share system bikes are usually comfortable, have integrated locks and cargo baskets and usually includes features that make city biking safe and pleasurable.  -->
+
+<!-- Apart from the safety and environmental friendly mode of transport provided by bike-share systems, they bring huge economic gains by attracting more customers to nearby businesses. For instance, in congested places such as downtown regions, bike share customers spend far less time looking for parking and far more time patronizing neighboring businesses. Additionally, Bike sharing is a great way for individuals to choose active transportation for short trips which has a lot of health benefit since bike riding is a form of good exercise.  -->
+
+# Introduction
+
+## Data Description
+
+For this project, I used the Bike Sharing Dataset available in the [UC Irvine Machine Learning Repository](https://archive.ics.uci.edu/dataset/275/bike+sharing+dataset). The data set contains the hourly and daily count of rental bikes between the years 2011 and 2012 in the Capital bikeshare system with associated weather and seasonal information. To the best of my knowledge, this dataset is not available in any R package. 
+
+Capital Bikeshare is a bicycle-sharing system that serves Washington, D.C., and certain counties of the larger Washington metropolitan area including parts of Maryland, Virginia, and West Virginia. The service provides a convenient and eco-friendly way for people to get around the city and has helped promote cycling as a means of transportation in the region. As of January 2023, it had 700+ stations and more than 5,400 bicyles. Opened in September 2010, the system was the largest bike sharing service in the United States (Martinez, 2010) until New York City's Citi Bike began operations in May 2013
+
+The project utilized the daily bike rentals containing 731 instances spanning a period of two years from January 1, 2011 to December 31, 2012.
+
+A description of the data showcasing the variable information is presented in Table 1. 
+
+```{r "Variables-description", eval=T}
+col_names <- c("Variable Name", "Description", "Data Type")
+
+data.frame(
+  cbind(
+    vars =c("dteday", "season", "yr", "cnt"
+    ),
+    dsc = c(
+            "date string for each day consisting of year month and day",
+            "season (1:winter, 2:spring, 3:summer, 4:fall).",
+            "Year indicator, 0 for 2011 and 1 for 2012", 
+            "Count of total rental bikes including both casual and registered."
+            ),
+    type = c("Date", "Categorical", "Categorical", "Numeric/Discrete")
+  )
+) %>%
+  kable(format = "latex", linesep="", booktab=T,
+    col.names = col_names,
+    caption = "Definition of variables used in the analysis"
+    )  %>%
+  column_spec(1, width = "10em") %>%
+  column_spec(2, width = "20em") %>%
+  column_spec(3, width = "15em") %>%
+       kable_styling(font_size = 10,  latex_options = c("HOLD_position")) 
+
+```
+
+
+
+##  Research Questions or Objectives
+
+<!-- The project aims to provide insight into the Divvy bike-share system data and specifically address the following research questions: -->
+
+Among other things, the project seeks to resolve the following questions:
+
+- Is there an increasing or decreasing trend in bike rentals over time? 
+- How do changes in weather conditions or seasonal patterns affect bike rentals? Are certain times of the year consistently busier?
+- (**Demand forecasting**) What is the expected number of bike rentals in the next number of days (next week, or next month? 
+
+
+For the first question, we will start by visualizing the overall trend of bike rentals over the two-year period. We will then decompose the time series to analyze its trend, seasonality, and residuals. For the second question, we will examine bike rentals with respect to the season variable and other relevant time periods. Finally, for bike rental demand forecasting, we will build a time series forecast model (S)ARIMA and GARCH models. All the analyses were conducted in the R statistical environment and the corresponding codes can be found in **Appendix H**.
+
+
+# Exploration of the Data
+
+<!-- \noindent\rule{17.5cm}{0.8pt} -->
+Time series plots of the total bike rental counts along with the first order differenced series are displayed in **Figure \@ref(fig:figa)**. Plot of the original series shows strong seasonality, with peaks suggesting higher bike rentals during certain times of the year, likely corresponding to warmer weather, and troughs indicating lower rentals, possibly during colder months (See **Figure \@ref(fig:season-plot)**). There is a visible upward trend in the number of bike rentals over time, indicating an increase in the popularity or expansion of the bike-sharing program. The variance of the data points seems to be increasing over time; this could imply that as the number of rentals grows, the variability in the data also increases. 
+
+```{r}
+
+# bringing in the data
+bike_rentals <- readr::read_csv("bike+sharing+dataset/day.csv")
+
+# align meaningful labels
+bike_rentals <- bike_rentals |>
+    mutate(season_lab = factor(season, levels=c(1,2,3,4),
+                               labels=c("Winter", "Spring", "Summer", "Fall")),
+           Year = factor(yr, levels=c(0,1), labels=c("2011", "2012")),
+           cnt_norm  = cnt/max(cnt)
+    )
+# create a time series data
+bike_ts <- ts(bike_rentals$cnt, frequency = 1)
+
+# obtain the first difference
+bike_ts_diff <- diff(bike_ts) 
+
+```
+
+
+The observations made above and a look at the plot of series decomposed into various components shown in Appendix A suggest that differencing the series would be necessary to remove trends and stabilize the mean of the data. The differenced plot shows a reasonable stable process with fluctuations around a mean of zero, indicating that the differencing was effective in removing the trend and some of the seasonal patterns from the data. 
+
+The variance in the differenced data does not appear to be constant over time, suggesting that even after differencing, there may be some patterns or cyclical behaviors that have not been completely accounted for, or there may be changes in variance (heteroscedasticity) that need to be addressed. A log-transformation applied to the series before differencing did not help to bring any substantial improvement.
+
+
+
+```{r figa, out.width="50%", fig.ncol=2, fig.cap="Time series plots of total rental bikes including both casual and registered users. The time axis is in days.", fig.subcap=c("Original data", "1st order differenced series.")}
+
+# Time series plots
+tsplot(bike_ts, col=4) 
+tsplot(bike_ts_diff,col=4)
+abline(h=mean(bike_ts_diff), col=6)
+
+# on a log-scale
+# tsplot(log(bike_ts), col = 4)
+# tsplot(diff(log(bike_ts)), col=5) #
+# tsplot(diff(diff(bike_ts, 30)))
+
+```
+
+
+
+**Figure \@ref(fig:season-plot)** in Appendix A shows a time series plot of bike rentals faceted by year with the aim of revealing seasonal effects or patterns in bike rentals. There is a clear seasonal pattern in bike rentals. Rentals peak during the summer months and are lowest during the winter months. This is consistent across both years, indicating a strong seasonal effect likely due to weather conditions being more favorable for biking in the summer.
+
+The start of the peak season appears to shift slightly between years. For instance, the onset of higher rentals in spring seems to occur earlier in 2012 than in 2011. There are some abrupt changes in the number of rentals, such as a sharp decrease in fall 2012. These could be due to external factors such as extreme weather events, changes in bike-share policy, or temporary disruptions in service.
+
+Comparing the two years, it seems that the overall number of bike rentals increased from 2011 to 2012. This could be due to an increase in the number of bikes available, greater public awareness, or improvements in biking infrastructure. Despite the year-to-year growth and the occasional abrupt change, the overall pattern of rentals is quite consistent. This consistency across years suggests that the bike rental demand is relatively stable and predictable based on the season.
+
+
+## Autocorrelation and Partial Autocorrelation Functions
+
+**Figure \@ref(fig:pacf-plots)** shows the Autocorrelation Function (ACF) and Partical Autocorrelaton Function (PACF) plots of the original bike rental series and its differenced series.  The ACF of the original series shows a gradual decline, which typically indicates a non-stationary series with a strong trend component. This is consistent with a need for differencing to achieve stationarity as previously pointed out.
+
+
+Although it appears to be cutting off at lag 2, the ACF of the first-order differenced series still exhibits strong autocorrelations initially, but they also taper off, which suggests some degree of trend or seasonality. The same can be said of the PACF, it also tails off. The behavior seen in the ACF and the PACF is an indication that an ARMA(p, q) model, $p,q >0$ would be an appropriate fit to the differenced series.
+
+
+```{r pacf-plots, out.width="50%", fig.ncol=2, fig.cap="Autocorrelation and partial autocorrelation functions.", fig.subcap=c("ACF of original series", "ACF and PACF of the differenced series")}
+
+# ACF and PACF of the series
+aa <- acf1(bike_ts)
+
+aa <- acf2(bike_ts_diff)
+
+
+```
+
+
+# Spectral Analysis
+
+We estimated the spectra of the daily `bike rental` series using the smoothed periodogram estimate in equation (7.23) of @shumway2019time via the modified Daniell kernel, with 20\% tapering and without tapering. Tapering is a method used to reduce variance at the cost of introducing bias, by multiplying the time series with a window that de-emphasizes the observations at the beginning and end of the sample. Tapering can help in distinguishing between true cyclic behavior and random fluctuations that might produce misleading peaks in the periodogram. The peaks in the spectral density indicate the frequencies at which the time series data has strong periodic components. The most notable peaks appear at lower frequencies, suggesting the presence of long-term cycles in the data. With tapering, the periodogram still shows peaks at similar frequencies as without tapering, indicating that the identified cycles are robust to the variance reduction introduced by tapering. The overall shape of the spectrum remains similar.
+
+The presence of pronounced peaks at specific frequencies suggests that there are regular cycles in the bike rental data which may correspond to daily, weekly, or other seasonal patterns.
+
+We also fitted a parametric spectral estimator via an autoregressive spectral estimator to the `bike rental` data using the AIC model selection criterion. The results are shown in **Figure \@ref(fig:ar-spec)** in **Appendix E**, which suggest that the parametric estimator using AR(13) yielded identical smoothing for the data.
+
+
+```{r fig74, out.width="50%", fig.cap="Periodogram of bike rentals using a nonparametric procedure.", fig.subcap=c("Without tapering", "With tapering $20\\%$")}
+
+#--- Spectral analysis
+kern <- kernel("modified.daniell", c(5,5))
+
+# without tapering
+bike_spec <- mvspec(bike_ts_diff, kernel = kern, taper = 0, col=rgb(.05,.6,.75), lwd=2) # , xlim=c(0,0.5)
+
+# with tapering 
+bike_spec2 <- mvspec(bike_ts_diff, kernel = kern, taper = 0.2, col=rgb(.05,.6,.75), lwd=2) # , xlim=c(0,0.5)
+
+
+
+```
+
+
+
+
+
+<!-- Even though both clearly identifies the main periodicity of 11 years, the AR spectral estimator is more precise at emphasizing the main periodicities in the series compared to the conventional nonparametric spectral estimator which provides a wider range of frequencies. -->
+
+
+
+# Modeling and Forecasting Bike Rentals
+
+## Candidate Models
+
+Given the foregoing observations made from the P/ACF plots (**Figure \@ref(fig:pacf-plots)**), a potential ARMA model to try for the differenced series could be ARMA(1,1) or ARMA(1,2) or any ARMA(p,q), where both $p$ and $q$ exceed 0. However, given that the data is daily and likely has weekly or monthly seasonality, a SARIMA model might be more appropriate. Since the plots do not show the seasonal lags (which would be at multiples of the seasonal frequency), we cannot directly infer the seasonal components from these plots. A starting SARIMA model, taking into account potential weekly/monthly seasonality, could be $SARIMA(1,1,1)\times(1,1,1)_7$, or  $SARIMA(1,1,1)\times(1,1,1)_{30}$,  where the seasonal components are based on the assumption of weekly or monthly seasonality in daily data. 
+
+It was apparent that the bike series exhibited volatility clustering which informed us to consider a GARCH model. In particular, we considered a GARCH model of the form ARMA(1,1)-GARCH(1,1) for a possible better fit to the data. In all, 7 models were considered as presented in **Table \@ref(tab:model-choice)**.
+
+
+## Residual Analysis
+
+After estimating the parameters of the various models considered, we proceeded to analyze the residuals for evidence of model adequacy. Residual diagnostic plots of all the models suggested no significant departures for the model assumptions. For brevity, however, we only presented the diagnositics plots of the two final models as shown in **Figures \@ref(fig:arma-resid) and \@ref(fig:garch-resid)** in **Appendix E**. These residual analyses looked decent except for a few potential outliers. Specifically, the residuals look white (because the ACF of the residuals fall within the confidence bands and the Ljung-Box statistic p-values are all above the 5\% significance level), and the distribution of the residuals appear reasonably normal.
+
+
+
+## Model Selection 
+
+According to **Table \@ref(tab:model-choice)**, the ARMA(1,1)-GARCH(1,1) turns out to be the overall best model based on both AIC and the BIC selection criteria. The ARMA(1,1) is preferred by all the metrics when considering the (S)ARMA models. It must be noted that all the models performed quite similarly given how close their performance metrics are. Thus, we concluded with ARMA(1,1) model and the ARMA(1,1)-GARCH(1,1) model as the final selected models for bikeshare rental demand forecasting. For a simple model, however, the ARMA(1,1) is preferred over the GARH model since the differnece in performance is not significantly different. Model parameter estimates can be found in **Appendix G**.
+ 
+
+```{r "model-choice", eval=T}
+
+# Fit candidate ARIMA models
+mod1 <- (sarima(bike_ts, p=1, d=1,q=1, details = F))
+mod2 <- (sarima(bike_ts, p=2, d=1,q=1, details = F))
+mod3 <- (sarima(bike_ts, p=3, d=1,q=2, details = F))
+mod4 <- (sarima(bike_ts, p=6, d=1,q=3, details = F))
+# mod5 <- (sarima(bike_ts, p=3, d=1,q=3, details = F))
+
+# Fit SARIMA models
+mod6 <-sarima(bike_ts, p=1, d=1,q=1, P=1, D=1, Q=1, S=7, details = F)
+mod7 <- sarima(bike_ts, p=1, d=1,q=1, P=1, D=1, Q=1, S=30, details = F)
+# mod8 <- sarima(bike_ts, p=1, d=1,q=1, P=1, D=1, Q=1, S=30, details = F)
+
+# Fit the Garch model
+library(fGarch)
+garch <- garchFit(~arma(1,1) + garch(1,1), bike_ts_diff, trace = F)
+
+gmetrics <- garch@fit$ics # get the AIC and BIC from the GARCH model
+
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    
+    c(mod1$AIC, mod1$AICc, mod1$BIC),
+    c(mod2$AIC, mod2$AICc, mod2$BIC),
+    c(mod3$AIC, mod3$AICc, mod4$BIC),
+    c(mod4$AIC, mod4$AICc, mod4$BIC),
+    # c(mod5$AIC, mod5$AICc, mod5$BIC),
+    c(mod6$AIC, mod6$AICc, mod6$BIC),
+    c(mod7$AIC, mod7$AICc, mod7$BIC),
+    # c(mod8$AIC, mod8$AICc, mod8$BIC),
+    c(gmetrics["AIC"], NA, gmetrics["BIC"])
+)) 
+
+names(result_tbl) <- c("AIC", "AICc", "BIC")
+
+rownames(result_tbl) <- c("ARMA(1,1)", "ARMA(2,1)", "ARMA(3,2)", "ARMA(6,3)",
+                          "SARMA(1,1)(1,1)7","SARMA(1,1)(1,1)30", "ARMA(1,1)-GARCH(1,1)")
+
+## display table of results 
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "ccc", digits=4,
+          caption = "Performance metrics for the candidate models fitted to the differenced daily bike rentals series") |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+
+
+```
+
+
+```{r eval=FALSE}
+#---- Automatic model selection: could there be a better ARIMA than what we found?
+auto_fit <- auto.arima(bike_ts, seasonal = T)
+
+```
+
+Running the `auto.arima()` from the `forecasts` R package produced ARIMA(1,1,1) as the best fitting model to the data, which coincided with our selected the model through the manual model selection.
+
+
+
+## Forecasts from selected Models
+
+Finally, we forecast the bike rental data into the future seven (7) days ahead (one week) and 30 days ahead (about one month) and calculated 95\% prediction intervals for each of the forecasts using the final ARIMA(1,1,1) model and the GARCH model. The forecasts from the ARIMA and GARCH models are displayed in Figure \@ref(fig:arima-forecast), and Figure \@ref(fig:garch-forecast) in the Appendix, respectively. It must be noted that, while the ARIMA forecasts are in the same units as the original bike rentals, the ARMA-GARCH forecasts reflect the differenced series. 
+
+The forecasted values (red circles) begin after the last observed data point and continue for a short horizon, representing one week of future values. We can see that the confidence intervals are relatively narrow near the start of the forecast but gradually widen as the forecast horizon extends. This widening reflects increasing uncertainty in the predictions as we move further away from the last known data point. Similar to the one-week forecasts, the one-month forecasts show the predicted values for a longer period. The confidence intervals are noticeably wider here, indicating even greater uncertainty over the longer forecast horizon. This is expected as predicting further into the future inherently comes with greater uncertainty. The forecasts do not show any pronounced peaks or troughs, suggesting that the model captures the general trend of the series rather than any cyclic or seasonal behavior.
+
+
+```{r arima-forecast, fig.cap="Forecasts over one-week and one-month horizons based on the ARMA(1,1,1) model fitted to the original bike rental series. The time axes are in days.", fig.ncol=2, out.width="50%", fig.subcap=c("One-week horizon forecasts", "One-month horizon forecasts")}
+
+# one week horizon
+ff <- sarima.for(bike_ts, p=1, d=1,q=1, n.ahead = 7)
+
+# one month horizon
+ff <- sarima.for(bike_ts, p=1, d=1,q=1, n.ahead = 30)
+```
+
+
+
+
+# Discussion and Conclusion
+
+Our comprehensive analysis of the daily bike rental series revealed several critical insights into the underlying patterns and characteristics of bike-sharing usage. Initial exploratory data analysis revealed a pronounced seasonal pattern, with demand peaking during summer months and dropping during winter, indicative of weather-related influence on bike rental behavior. Subsequent time series decomposition highlighted the presence of both trend and seasonality. Year-over-year growth suggested an increasing trend in bike usage, which we hypothesized as a positive indicator of the service's expanding popularity.
+
+The spectral analysis further enriched our understanding by uncovering the cyclic nature of the data. The periodograms, both with and without tapering, confirmed the presence of significant periodic components at specific frequencies. These findings suggest the existence of long-term cycles in the data, potentially corresponding to weekly or other regular usage patterns, which are not immediately apparent from time domain analyses alone.
+
+The ARIMA(1,1,1) model, selected for its simplicity and interpretability, provided a reasonable baseline for short-term forecasting, revealing the general trend of the series. However, the model's forecasts for one-week and one-month horizons displayed increasing uncertainty, particularly evident in the widening confidence intervals for the longer-term predictions.
+
+These findings could be helpful for the bike-share program to anticipate demand, schedule maintenance, and promote bike usage throughout the year. It would also be important to analyze other factors such as all the weather information included in the data, special events, and changes in local transportation policy that could influence these trends.
+
+
+\newpage 
+
+<!-- - Robert H. Shumway, & David S. Stoffer. (2019). Time Series: A Data Analysis Approach Using R. -->
+
+# Appendix {-}
+
+## A: Effect of Seasonal (weather) Patterns {-}
+
+```{r season-plot, out.width="75%", fig.cap="Effect of seasonal patterns on bike rentals."}
+ggplot(bike_rentals, aes(dteday, cnt, color=season_lab)) +
+    geom_line() +
+    facet_wrap(vars(Year), ncol = 1, labeller = "label_both") +
+    labs(x="Date", y="Bike Rentals", color="Season")
+```
+
+
+## B: ARMA(1,1)-GARCH Forecasts {-}
+
+```{r garch-forecast, fig.cap="Forecasts over a one-week and over a one-month horizons based on the ARMA(1,1)-GARCH(1,1) model fitted to the differenced bike rental series.", fig.ncol=2, out.width="50%", fig.subcap=c("One-week horizon forecasts", "One-month horizon forecasts")}
+
+# one week horizon
+ff <- fGarch::predict(garch, n.ahead=7, plot=T)
+
+# one month horizon
+ff <- fGarch::predict(garch, n.ahead=30, plot=T) 
+```
+
+
+## C: Decomposing the series {-}
+
+```{r fig.cap="Decompostion of the bike rental series into trend, seasonality, and residual (randomness)."}
+bike_ts_decom <- stats::decompose(ts(bike_rentals$cnt, frequency = 30))
+plot(bike_ts_decom, col=5)
+```
+
+
+
+
+## D: Test for stationarity of first difference of the series
+
+
+```{r}
+# test of stationarity
+library(tseries)
+adf.test(bike_ts_diff, alternative = "stationary") # stationary
+# adf.test(diff(log(bike_ts)), alternative = "stationary") # stationary
+
+
+``` 
+
+## E: Parametric Spectral Estimator {-}
+
+```{r ar-spec, out.width="50%", fig.ncol=2, fig.cap="Autoregressive spectral estimator for the bike rental series using the AR(13) model selected by AIC", fig.subcap=c("Spectral estimate", "AIC values for different orders of the AR model")}
+
+#--- Parametric spectral analysis
+ar_spec <- spec.ar(bike_ts_diff, log="no", col="cyan4")
+# abline(v=f)
+
+# selecting optimal AR order
+bike_ar <- ar(bike_ts_diff, order.max = 50)
+opt_p <- which.min(bike_ar$aic[-1])
+plot(1:50, bike_ar$aic[-1], type = "o", ylab = "AIC", xlab = "AR order p")
+abline(v=opt_p, lty="dotted", col=2)
+text(13, 100, labels=opt_p, col = "dodgerblue")
+
+```
+
+
+## F: Residual Diagnostics {-} 
+
+
+
+```{r arma-resid,fig.cap="Residual analysis for the fitted ARMA(1,1) model"}
+# Residual diagnostics
+mod1 <- capture.output(sarima(bike_ts, p=1, d=1,q=1))
+```
+
+
+```{r garch-resid, fig.cap="Residual diagnostic plots for the AMRA(1,1)-GARCH(1,1) model.", fig.ncol=2, fig.subcap=c('','','',''), out.width="50%"}
+
+# residual plots for the AMRA(1,1)-GARCH(1,1) model
+plot(garch, which=c(9,10,11,13))
+```
+
+
+
+```{r eval=F, fig.cap="Residual analysis for the fitted ARMA(0,3) model"}
+
+# diagnositics for other models
+mod2 <- capture.output(sarima(bike_ts, p=2, d=1,q=1))
+mod3 <- capture.output(sarima(bike_ts, p=1, d=1,q=2))
+mod4 <- capture.output(sarima(bike_ts, p=2, d=1,q=2))
+mod5 <- capture.output(sarima(bike_ts, p=3, d=1,q=6))
+
+# SARIMA models
+mod6 <- capture.output(sarima(bike_ts, p=1, d=1,q=1, P=1, D=1, Q=1, S=7)) # weekly seansonality
+mod7 <- capture.output(sarima(bike_ts, p=1, d=1,q=1, P=1, D=1, Q=1, S=30))
+
+
+```
+
+
+## G: Parameter estimates from selected Models (ARMA(1,1), ARMA(1,1,1)-GARCH(1,1)) {-}
+
+
+```{r "arma11-estimation", eval=T}
+arma11 <- sarima(bike_ts, 1,1,1, details = F, no.constant = T) 
+
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    arma11$ttable,
+    c(arma11$fit$sigma2, rep(NA, 3)),
+    c(arma11$AIC, rep(NA, 3)),
+    c(arma11$AICc, rep(NA, 3)),
+    c(arma11$BIC, rep(NA, 3))
+)) 
+rownames(result_tbl) <- c("AR1", "MA1", "Sigma^2", "AIC", "AICc", "BIC")
+
+## display table of results 
+options(knitr.kable.NA='')  # suppress NAs from table output
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "lcccc", digits=4,
+          caption = "Parameter estimates for best (S)ARMA model, ARMA(1,1)", na="") |>
+    pack_rows("Coefficients", 1, 2) |>
+    pack_rows("Performance metrics", 3, 6) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+
+```
+
+ **ARMA(1,1)-GARCH(1,1) Summary Output (Parameter estimates)**
+
+```{r "garch-estimation", eval=T}
+garch <- garchFit(~arma(1,1) + garch(1,1), bike_ts_diff, trace = F)
+garch_sum <- summary(garch)
+
+```
+
+## H: R Codes for the Analysis {-}
+
+<!-- all R codes are extracted into this chunk -->
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```
+
+
+# References{-} 
+
+- Bike Sharing Dataset: https://archive.ics.uci.edu/dataset/275/bike+sharing+dataset
+
+- Martinez, Matt (2010). "Washington D.C., launces the nation's largest bike share program": https://grist.org/article/2010-09-20-washington-d-c-launches-the-nations-largest-bike-share-program/
+
+<!-- - https://machinelearningmastery.com/time-series-datasets-for-machine-learning/ -->
+
+
+
+
+
