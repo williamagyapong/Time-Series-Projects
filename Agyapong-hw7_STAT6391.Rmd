@@ -1,0 +1,334 @@
+---
+title: '`r params$hw_title`'
+subtitle: "Time Series Analysis (STAT 6391) "
+author: 
+ - Willliam Ofosu Agyapong^[woagyapong@miners.utep.edu, PhD Data Science, University of Texas at El Paso (UTEP).]
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  bookdown::pdf_document2:
+    fig_caption: true
+    keep_tex: yes
+    latex_engine: xelatex
+    number_sections: no
+    toc: false
+    # toc_depth: 4
+    extra_dependencies: "subfig"
+header-includes:
+- \usepackage{amsmath}
+- \usepackage{amssymb}
+- \usepackage{amsfonts}
+- \usepackage{amsthm}
+- \usepackage{esvect}
+- \usepackage{floatrow}
+- \usepackage{float}
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhf{}
+- \rhead{William O. Agyapong}
+- \lhead{`r params$hw_title`}
+- \cfoot{\thepage}
+- \usepackage{algorithm}
+- \usepackage[noend]{algpseudocode}
+geometry: margin = 1in
+fontsize: 10pt
+params:
+  hw_title: Homework 7
+bibliography: ../references.bib
+link-citations: yes
+linkcolor: blue
+nocite: | 
+    @shumway2019time
+ 
+---
+
+
+```{r setup, include=FALSE}
+# Set global options for output rendering
+knitr::opts_chunk$set(eval = T, echo = F, warning = F, message = F, 
+                      fig.pos = "H", out.extra = "", fig.align = "center",
+                      cache = F, comment="")
+
+#----------------- Load required packages
+# library(dplyr)
+library(knitr)
+library(kableExtra)
+# library(broom)
+library(stats)
+library(astsa)
+
+  
+#----------------- set the current working directory to the file path
+setwd(dirname(rstudioapi::getSourceEditorContext()$path)) 
+
+
+```
+
+
+
+
+<!-- \noindent\rule{17.5cm}{0.8pt} -->
+
+\newpage
+
+# Problem 5.1 
+
+We calculate the EWMA, $x^n_{n+1}$, for the first 100 observations for the logarithm of the glacial varve data, say $x_t$ with $\lambda=.25, .50$ and $.75$.
+
+```{r fig51, out.width="50%", fig.ncol=2, fig.cap="Logarithm of the first 100 glacial varve data (in black) with EWMAs for $\\lambda=.25, .50, .75$ superimposed (in red).", fig.subcap=c("$\\lambda=.25$", '$\\lambda=.50$', '$\\lambda=.75$')}
+set.seed(123)
+lambda <- c(.25, .50, .75)
+alpha <- 1 - lambda
+x <- log(varve[1:100])
+for (alpha_val in alpha) {
+    ewma_log_varve <- HoltWinters(x, alpha = alpha_val, beta = FALSE, gamma = FALSE)
+plot(ewma_log_varve, main="")
+    # plot(x, type = "o", ylab = "log(varve)")
+    # lines(ewma_log_varve$fit[,1], col=2)
+}
+```
+
+From the plots in Figure \@ref(fig:fig51), we make the following observations:
+
+- For $\lambda = .25$, the the logarithm of the data and the EWMA are indistinguishable (i.e., the forcasts by the EWMA is too wiggly). 
+- For $\lambda = .50$, the EWMA is less wiggly than that for $\lambda = .25$ but less smoother than that for $\lambda = .75$.
+- For $\lambda = .75$, the EWMA is less wiggly and forms a smooth curve.
+
+In general, we observe that, as the value of $\lambda$ increases from $.25$ to $.75$, the EWMA becomes less wiggly and more smoother. Thus, confirming the general behavior of EWMAs that larger values of $\lambda$ produce smoother forecasts [@shumway2019time].
+
+# Problem 5.2
+
+## Exploring the US GDP series
+
+For this problem, we repeat the analysis done in Example 5.6 in [@shumway2019time] for the US GDP series. We start with a time series plot of the actual GDP series with a corresponding ACF plot as shown in \@ref(fig:fig52a). We observe a strong trend in the data with periodic dips. The ACF plot exhibits a slow decay, indicating that differencing may be needed, and hence affirming the appropriateness of analyzing the growth rate of GDP instead of the actual GDP.
+
+```{r fig52a, fig.cap="Top panel: Seasonally adjusted quarterly U.S. GDP from 1947(1) to 2018(3). Bottom panel: Sample ACF of the GDP data."}
+#---------- Problem 5.2 codes 
+
+##-- Figure 2 --##
+layout(1:2, heights=2:1)
+tsplot(gdp, col=4)
+acf_result <- acf1(gdp, main="")
+
+```
+
+Following our previous observations, we present in Figure \@ref(fig:fig52b) a time series plot of the quarterly GDP growth rate along with the sample ACF and PACF of the growth rate. The quarterly GDP growth rate appears to be a stable process. 
+
+```{r fig52b, out.width="50%", fig.ncol=2, fig.cap="U.S. GDP quarterly growth rate from 1947(1) to 2018(3) along with sample ACF and sample PACF. The horizontal red line displays the average growth of the process, which is approximately 1\\%. Lag is in years.", fig.subcap=c('U.S. GDP quarterly growth rate', 'Sample ACF', 'Sample PACF')}
+
+##-- Figure 3 --##
+tsplot(diff(log(gdp)), ylab="GDP Growth Rate", col=4) 
+abline(h=mean(diff(log(gdp))), col=6)
+
+# plots the corresponding sample ACF and PACF
+gdp_sample_acf <- acf1(diff(log(gdp)), main="")
+gdp_sample_pacf <- acf1(diff(log(gdp)), pacf = T, main="")
+```
+
+
+From Figure \@ref(fig:fig52b), we see that the sample ACF of GDP the growth rate appears to cut off at lag 2 and the PACF is somehow tailing off, suggesting that the GDP growth rate follows an MA(2) process, or log GDP follows an ARIMA(0,1,2) model. It also seems quite reasonable to also suggest that the ACF is tailing off while the PACF is cutting off at lag 1. This leads to two competing models, MA(2) and AR(1) for us to diagnose.
+
+In the next section, we consider parameter estimates and diagnostics for the two models.
+
+## Parameter estimation for GDP Growth Rate
+
+Parameter estimates for the suggested models for the GDP growth rate for MA(2) process and AR(1) process are presented in Tables \@ref(tab:ma2-estimation) and \@ref(tab:ar1-estimation), respectively.
+
+All the regression coefficients are statistically significant, including the estimate for the constant term. We will defer comparison of the performance metrics to the last stage of the analysis where we choose the final model.
+
+
+```{r "ma2-estimation"}
+ma2 <- sarima(diff(log(gdp)), 0,0,2, details = F) # MA(2) on growth rate
+
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    ma2$ttable,
+    c(ma2$fit$sigma2, rep(NA, 3)),
+    c(ma2$AIC, rep(NA, 3)),
+    c(ma2$AICc, rep(NA, 3)),
+    c(ma2$BIC, rep(NA, 3))
+)) 
+rownames(result_tbl) <- c("MA1", "MA2", "Constant", "Sigma^2", "AIC", "AICc", "BIC")
+
+## display table of results 
+options(knitr.kable.NA='')  # suppress NAs from table output
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "lcccc", digits=4,
+          caption = "Parameter estimates and performance metrics for MA(2)  model for the GDP growth rate.", na="") |>
+    pack_rows("Coefficients", 1, 3) |>
+    pack_rows("Performance metrics", 4, 7) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+
+```{r "ar1-estimation"}
+
+#----- AR(1) estimation
+ar1 <- sarima(diff(log(gdp)), 1,0,0, details = F) # AR(1) on growth rate
+
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    ar1$ttable,
+    c(ar1$fit$sigma2, rep(NA, 3)),
+    c(ar1$AIC, rep(NA, 3)),
+    c(ar1$AICc, rep(NA, 3)),
+    c(ar1$BIC, rep(NA, 3))
+)) 
+rownames(result_tbl) <- c("AR1", "Constant", "Sigma^2", "AIC", "AICc", "BIC")
+
+## display table of results 
+options(knitr.kable.NA='')  # suppress NAs from table output
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "lcccc", digits=4,
+          caption = "Parameter estimates and performance metrics for AR(1)  model for the GDP growth rate.", na="") |>
+    pack_rows("Coefficients", 1, 2) |>
+    pack_rows("Performance metrics", 3, 6) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+
+```
+
+
+## Diagnostics for GDP Growth Rate
+
+Our next step involves residual diagnostics. Relevant diagnostics plots are provided in Figures \@ref(fig:fig52c) and \@ref(fig:fig52d), for the MA(2) fit and AR(1) fit, respectively.
+
+
+Inspection of the time plot of the standardized residuals in Figure \@ref(fig:fig52c) shows no obvious patterns. It is worthy to note that there may be outliers because a few standardized residuals exceed 3 standard deviations in magnitude. The impact of these potential outliers may not severe given that there are no values that are extremely large in magnitude.
+
+For the normality assumption, the Q-Q plot of the residuals suggests no serious violation. Moreover, the ACF of the residuals exhibits no obvious departure from the model assumptions, suggesting that the residuals are white.
+
+Next, we turn our attention to the Q-statistic. Some of the associated p-values for Ljung-Box statistic are above the .05 level line, whereas some fall on the line, so that the null hypothesis that the residuals are white may not be rejected.
+
+
+```{r fig52c, fig.cap="Diagnostics of the residuals from MA(2) fit on GDP growth rate."}
+
+ma2 <- sarima(diff(log(gdp)), 0,0,2) # MA(2) on growth rate
+
+```
+
+
+Based on \@ref(fig:fig52d), analysis of the AR(1) residuals reveal similar outcomes, except that the corresponding p-values for Ljung-Box statistic provides less evidence of white noise of the residuals (because all p-values fall on the .05 level reference line) compared to the one from the MA(2) model. 
+
+```{r fig52d, fig.cap="Diagnostics of the residuals from AR(1) fit on GDP growth rate."}
+
+ar1 <- sarima(diff(log(gdp)), 1,0,0) # AR(1) on growth rate
+
+```
+
+
+After the diagnostics presented above, we attempted to overfit the models by trying other models including MA(3), MA(4), AR(2), and AR(3), to see if the results change significantly.  Results of some of these complex models are presented in the Appendix, from which we concluded that the extra parameters do not significantly change the results.
+
+
+## Final Model Choice for the U.S. GDP Series
+
+Given the similarity in two models, we 
+
+In this final stage, we refer back to performance metrics (AIC, AICs, and BIC) in Tables \@ref(tab:ma2-estimation) and \@ref(tab:ar1-estimation). It is clear from the results that the MA(2) performs better than the AR(1) model when comparing the AIC and AICs, while the BIC prefers the simpler AR(1) model. There is not a clear winner, however, for parsimony and the fact that AR models are easy to work with, we will conclude with AR(1) model for the GDP growth rate.
+
+
+# Problem 5.3
+
+We begin by performing some exploratory analysis to provide a fair idea of the data to help us identify preliminary values of the AR order, p, and the MA order, q. 
+
+
+```{r fig53a, out.width="50%", fig.ncol=2, fig.cap="Exploring the Crude oil preices in dollars per barrel series.", fig.subcap=c('Crude oil preices in dollars per barrel', 'Growth rate of crude oil preices in dollars per barrel', 'Sample ACF of the growth rate', 'Sample PACF of the growth rate')}
+##--------- Problem 5.3 codes
+
+# plot the original series data
+tsplot(oil, col=4, ylab = "Prices in dollars per barrel")
+
+# plot of the growth rate
+oil_growth_rate <- diff(log(oil))
+tsplot(oil_growth_rate, ylab = "growth rate", col = 4)
+sample_acf <- acf1(oil_growth_rate)
+sample_pacf <- acf1(oil_growth_rate, pacf = T)
+
+```
+
+Time series plot of the actual crude oil prices per barrel shows strong trend in the data. Although the growth rate of oil prices per barrel appears stabilized, there is still some appearance of seasonal correlations. 
+
+Both the ACF and PACF are tailing off, which suggests that an ARIMA model may be appropriate. For starters, we fitted ARIMA(1,0,1) or ARMA(1,1) to the growth rate and later explored other forms of the ARIMA model. Most of the model choices with respect to d=0 and varying values of p and q produced somewhat identical models to ARIMA(1,0,1). However, ARIMA(0,0,3) appeared better among them all, so for brevity we presented diagnostics for only ARIMA(1,0,1) fit along with ARIMA(0,0,3) fit to the growth rate.
+
+
+```{r fig53b, fig.cap="Diagnostics of the residuals from ARIMA(1,0, 1) fit on crude oil prices per barrel growth rate."}
+arma11_fit <- sarima(oil_growth_rate, 1,0,1) # ARMA(1,1) to the growth rate
+```
+
+
+Inspection of the time plot of the standardized residuals in Figure \@ref(fig:fig53b) reveals no obvious patterns. However, some relatively large outliers are present. The ACF of the residuals exhibits mild departure (not too concerning though) from the model assumptions because some of the values extend slightly beyond the confidence bands. The Q-Q plot of the residuals suggests that the distribution of the residuals is reasonably normal.
+
+Most of the p-values fall on the .05 horizontal line while 4 of them exceed .05, with no values falling far from the referenced line. This suggest that we have sufficient evidence (not too strong) not to reject the null hypothesis that the residuals are white. 
+
+Next, we present diagnostics of the residuals from ARIMA(0,0,3) fit to the growth rate of crude oil prices per barrel in Figure \@ref(fig:fig53c). The results look very identical to the results obtained in Figure \@ref(fig:fig53b) for the ARIMA(1,1) fit. The only obvious difference lies between the p-values for the Ljung-Box statistic plots for the two models, where the p-values for the ARIMA(0,0,3) fit provide stronger evidence of the residuals being white than the evidence provided by the ARIMA(1,0,1) fit.
+
+
+
+
+```{r fig53c, fig.cap="Diagnostics of the residuals from ARIMA(0,0,1) fit on crude oil prices per barrel growth rate."}
+arma03_fit <- sarima(oil_growth_rate, 0,0,3) # ARMA(0,3) to the growth rate
+```
+
+
+
+
+
+
+Overall, ignoring the potential effect of the large outliers observed, the diagnostics have shown that the ARIMA(1,1,1) and ARIMA(0,1,3) models to the log of the oil prices or the ARIMA(1,0,1) and ARIMA(0,0,3) models to the growth rate appears to fit the data reasonably well. 
+
+
+To choose which is better, we compared the AIC, the AICc, and the BIC for the two models and the results are presented in Table \@ref(tab:final-mod2). In terms of AIC and AICs the ARIMA(0,0,3) appears better for the growth rate, while ARIMA(1,0,1) appears better when considering the BIC. 
+
+
+```{r "final-mod2"}
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    
+    c(arma11_fit$AIC, arma11_fit$AICc, arma11_fit$BIC),
+    c(arma03_fit$AIC, arma03_fit$AICc, arma03_fit$BIC)
+)) 
+names(result_tbl) <- c("AIC", "AICs", "BIC")
+rownames(result_tbl) <- c("ARIMA(1,0,1)", "ARIMA(0,0,3)")
+
+## display table of results 
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "ccc", digits=4,
+          caption = "Performance metrics for ARIMA(1,0,1) and ARIMA(0,0,3) for the growth rate of crude oil prices.") |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+
+
+\newpage
+
+<!-- - Robert H. Shumway, & David S. Stoffer. (2019). Time Series: A Data Analysis Approach Using R. -->
+
+# Appendix {-} 
+
+## A: Other models with extra parameters fitted to the GDP growth rate series {-}
+
+```{r}
+# trying other forms of models:
+other_mod<- sarima(diff(log(gdp)), 0, 0, 3) # try an MA(2+1) fit (not shown)
+other_mod2 <- sarima(diff(log(gdp)), 2, 0, 0) # try an AR(1+1) fit (not shown)
+
+# sarima(diff(log(gdp)), 0, 0, 4) # try an MA(2+2) fit (not shown)
+# sarima(diff(log(gdp)), 3, 0, 0) # try an AR(1+2) fit (not shown)
+
+```
+
+
+## B: R Codes for the Analysis {-}
+<!-- all R codes are extracted into this chunk -->
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```
+
+
+# References{-} 
+
+
+
+
+
+
+

@@ -1,0 +1,441 @@
+---
+title: '`r params$hw_title`'
+subtitle: "Time Series Analysis (STAT 6391) "
+author: 
+ - Willliam Ofosu Agyapong^[woagyapong@miners.utep.edu, PhD Data Science, University of Texas at El Paso (UTEP).]
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  bookdown::pdf_document2:
+    fig_caption: true
+    keep_tex: no
+    latex_engine: xelatex
+    number_sections: no
+    toc: false
+    # toc_depth: 4
+    extra_dependencies: "subfig"
+header-includes:
+- \usepackage{amsmath}
+- \usepackage{amssymb}
+- \usepackage{amsfonts}
+- \usepackage{amsthm}
+- \usepackage{esvect}
+- \usepackage{floatrow}
+- \usepackage{float}
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhf{}
+- \rhead{William O. Agyapong}
+- \lhead{`r params$hw_title`}
+- \cfoot{\thepage}
+- \usepackage{algorithm}
+- \usepackage[noend]{algpseudocode}
+geometry: margin = 1in
+fontsize: 10pt
+params:
+  hw_title: Homework 5
+bibliography: ../references.bib
+link-citations: yes
+linkcolor: blue
+nocite: | 
+    @shumway2019time
+ 
+---
+
+
+```{r setup, include=FALSE}
+# Set global options for output rendering
+knitr::opts_chunk$set(eval = T, echo = F, warning = F, message = F, 
+                      fig.pos = "H", out.extra = "", fig.align = "center",
+                      cache = F, comment="")
+
+#----------------- Load required packages
+# library(dplyr)
+library(knitr)
+library(kableExtra)
+# library(broom)
+library(stats)
+library(astsa)
+
+  
+#----------------- set the current working directory to the file path
+setwd(dirname(rstudioapi::getSourceEditorContext()$path)) 
+
+
+```
+
+
+
+
+<!-- \noindent\rule{17.5cm}{0.8pt} -->
+
+\newpage
+
+# Problem 4.3
+
+
+We consider the following two models:
+
+(i) $x_t = 0.80x_{t-1} - 0.15x_{t-2} + w_t - 0.30w_{t-1}$
+
+(ii) $x_t = x_{t-1} - 0.50x_{t-2} + w_t - w_{t-1}$.
+
+## Part (a)
+
+Checking the models for parameter redundancy.
+
+**For model (i):**
+
+
+\begin{align*}
+ &\ x_t = 0.80x_{t-1} - 0.15x_{t-2} + w_t - 0.30w_{t-1}\\
+ \Rightarrow &\ x_t - 0.80x_{t-1} + 0.15x_{t-2} =  w_t - 0.30w_{t-1}\\
+ \Rightarrow &\ (1-0.80B + 0.15B^2)x_t = (1-0.30B)w_t\\
+ \Rightarrow &\ (1-0.5B)(1-0.30B)X_t = (1-0.30B)w_t
+\end{align*}
+
+The common term $(1-0.30B)$ on each side of the last line indicates that the model is over-parameterized or suffers from parameter redundancy, and can be reduced by canceling out the factor $(1-0.30B)$  as follows.
+
+\begin{align*}
+ \Rightarrow &\ (1-0.5B)X_t = w_t\\
+ \Rightarrow &\ x_t - 0.50Bx_t = w_t\\
+ \Rightarrow &\ x_t = 0.50x_{t-1} + w_t,
+\end{align*}
+
+which suggests that model (i) is actually an AR(1) model. 
+
+**For model (ii):**
+
+\begin{align*}
+ &\ x_t = x_{t-1} - 0.50x_{t-2} + w_t - w_{t-1}\\
+ \Rightarrow &\ x_t - x_{t-1} + 0.50x_{t-2} =  w_t - w_{t-1}\\
+ \Rightarrow &\ (1 - B + 0.50B^2)x_t = (1-B)w_t
+\end{align*}
+
+We notice that it is not possible to factorize the left hand side to have a term in $(1-B)$. Thus, we conclude that model (ii) is not over-parameterized (there is no parameter redundancy). Consequently, model (ii) cannot be reduced any further and so it remains an ARMA (2,1) model.
+
+
+For confirmation, we also obtained the roots of the two models in R. Considering the roots for model (i), there is one common factor with root 3.33 and hence the model is over-parameterized and can be reduced. There is no common root for model (ii) and hence the model is not over-parameterized and cannot be reduced any further as noted above.
+
+
+
+```{r echo=TRUE}
+#--- checking for parameter redundancy
+
+# Model (i)
+AR <- c(1, -.8, .15)
+MA <- c(1, -.3)
+polyroot(AR)
+polyroot(MA)
+
+# Model (ii)
+AR <- c(1, -1, .5)
+MA <- c(1, -1)
+polyroot(AR)
+polyroot(MA)
+# 
+```
+
+
+## Part (b)
+
+Next, we determine if the two models are causal and/or invertible.
+
+```{r echo=TRUE}
+
+# ---------- Problem 4.3 (b)
+# model (i)
+AR <- c(1, -.5)     # new AR coefs on the left
+
+polyroot(AR)
+
+```
+
+The above result shows that the reduced form of model (i) is causal since the AR term has no roots that are less than or equal to one in magnitude.  It seems that we cannot draw a firm conclusion about invertibility using the root principle since the MA part was shown to be redundant. 
+
+However, If we assume that the MA part is zero (in the case of the reduced model), then the root of the MA would be zero which suggests that the model is not invertible according to the root criteria.
+
+
+```{r echo=TRUE}
+# Model (ii)
+AR <- c(1, -1, .5)
+MA <- c(1, -1)
+polyroot(AR)
+polyroot(MA)
+
+```
+
+The roots for the AR term and the MA term indicate that model (ii) is causal but not invertible because the roots of the AR part are greater than 1 in magnitude ($\approx 1.41$) while the single root of the MA part is equal to 1.
+
+
+\newpage
+
+## Part (c)
+
+We found the first 50 coefficients of the causal [MA($\infty$)] and invertible [AR($\infty$)] representations of models (i) and model (ii), respectively, and plotted the results as shown in Figure \@ref(fig:fig43c). 
+
+The results suggest that the reduced form of model (i), AR(1), is both causal and invertible since the coefficients for the causal and invertible representations converge to zero. However, model (ii) appears to be only causal since the causal representation converges to zero but the invertible part does not.
+
+
+<!-- **Remarks:**  -->
+
+<!-- We notice a bit of inconsistency for the reduced model (AR(1)). The polynomial roots suggested that the model was only causal, meanwhile the causal and invertible coefficients suggested that the model is both causal and invertible.  -->
+
+
+```{r fig43c, out.width="50%", fig.ncol=2, fig.cap="First 50 coefficients of the causal and invertible representations of the two models. For model (i), we showed the representations for the reduced model, AR(1).", fig.subcap=c('Reduced form of model (i) causal coefficients', 'Reduced form of model (i) invertible coefficients', 'Model (ii) causal coefficients', 'Model (ii) invertible coefficients')}
+
+# ---------- Problem 4.3 (c)
+
+# model (i) - reduced form
+digits <- 3
+psi <- round(ARMAtoMA(ar=.5, ma=0, 50), digits) 
+theta <- round(ARMAtoAR(ar=.5, ma=0, 50), digits) 
+
+plot(psi, xaxp=c(0,144,12), type="n", col=4,
+           ylab=expression(phi-weights),
+           main=expression(AR(1)~~~phi[1]==0.5))
+abline(v=seq(0,48,by=12), h=seq(min(psi), max(psi),.1), col=gray(.9))
+lines(psi, type="o", col=4)
+abline(h=0, col=2)
+
+plot(theta, xaxp=c(0,144,12), type="n", col=4,
+           ylab=expression(theta-weights),
+           main=expression(MA(0)~~~theta[1]==0.0))
+abline(v=seq(0,48,by=12), h=seq(min(theta), max(theta),.1), col=gray(.9))
+lines(theta, type="o", col=4)
+abline(h=0, col=2)
+
+# Model (ii) - original model
+psi <- round(ARMAtoMA(ar=c(1,-.5), ma=-1, 50), digits) 
+theta <- round(ARMAtoAR(ar=c(1,-.5), ma=-1, 50), digits) 
+
+plot(psi, xaxp=c(0,144,12), type="n", col=4,
+           ylab=expression(phi-weights),
+           main=expression(AR(2)~~~phi[1]==1~~~phi[2]==-0.5))
+abline(v=seq(0,48,by=12), h=seq(min(psi), max(psi),.1), col=gray(.9))
+lines(psi, type="o", col=4)
+abline(h=0, col=2)
+
+plot(theta, xaxp=c(0,144,12), type="n", col=4,
+           ylab=expression(theta-weights),
+           main=expression(MA(1)~~~theta[1]==-1))
+abline(v=seq(0,48,by=12), h=seq(min(theta), max(theta),.1), col=gray(.9))
+lines(theta, type="o", col=4)
+abline(h=0, col=2)
+
+
+```
+
+
+
+# Problem 4.4
+
+## Part (a)
+
+```{r fig44a, out.width="50%", fig.ncol=2, fig.cap="Comparing theoretical ACF and PACF of ARMA(1,1), an ARMA(1,0), and an ARMA(0,1) for $\\phi=0.6$, $\\theta=0.9$.", fig.subcap=c('ACF of ARMA(1,1)', 'PACF of ARMA(1,1)', 'ACF of ARMA(1,0)', 'PACF of ARMA(1,0)','ACF of ARMA(0,1)', 'PACF of ARMA(0,1)')}
+
+# ---------- Problem 4.4 (a)
+
+# compute the theoretical ACFs of the three models
+ACF1 <- ARMAacf(ar=.6, ma=.9, 24)[-1] # discard the first
+ACF2 <- ARMAacf(ar=.6, ma=0, 24)[-1]
+ACF3 <- ARMAacf(ar=0, ma=.9, 24)[-1]
+
+# compute the theoretical PACFs of the three models
+PACF1 <- ARMAacf(ar=.6, ma=.9, 24, pacf=TRUE)
+PACF2 <- ARMAacf(ar=.6, ma=0, 24, pacf=TRUE)
+PACF3 <- ARMAacf(ar=0, ma=.9, 24, pacf=TRUE)
+# plot the results
+tsplot(ACF1, type="h", xlab="lag", ylim=c(-.8,1))
+abline(h=0)
+tsplot(PACF1, type="h", xlab="lag", ylim=c(-.8,1))
+abline(h=0)
+
+tsplot(ACF2, type="h", xlab="lag", ylim=c(-.8,1))
+abline(h=0)
+tsplot(PACF2, type="h", xlab="lag", ylim=c(-.8,1))
+abline(h=0)
+
+tsplot(ACF3, type="h", xlab="lag", ylim=c(-.8,1))
+abline(h=0)
+tsplot(PACF3, type="h", xlab="lag", ylim=c(-.8,1))
+abline(h=0)
+
+```
+
+Based on Table 4.1 in [@shumway2019time], it is clear from Figure \@ref(fig:fig44a) that the theoretical ACFs and PACFs adequately determine the order of their respective models. Both ACF and PACF for the ARMA(1,1) model do not cut off as expected. On the other hand, the ACF for the ARMA(1,0) model tails off while the corresponding PACF cuts off at lag 1, signifying an autoregressive model of order 1, and the opposite is true for the ARMA(0,1) model where its ACF cuts off at lag 1 whereas its PACF tails off, signifying a moving average model of order 1.
+
+## Part (b)
+
+
+```{r fig44b, out.width="50%", fig.ncol=2, fig.cap="Comparing sample ACF and PACF of simulated series from ARMA(1,1), an ARMA(1,0), and an ARMA(0,1) for $\\phi=0.6$, $\\theta=0.9$. $n=100$ observations were generated.", fig.subcap=c('Sample ACF of series simulated from ARMA(1,1)', 'Sample PACF of of series simulated from ARMA(1,1)', 'Sample ACF of of series simulated from ARMA(1,0)', 'Sample PACF of of series simulated from ARMA(1,0)','ACF of ARMA(0,1)', 'Sample PACF of of series simulated from ARMA(0,1)')}
+
+# ---------- Problem 4.4 (b)
+set.seed(1234) # seed for reproducibility of results
+
+# Generate n=100 observations from each of the 3 models in part (a)
+arma11 <- arima.sim(list(order=c(1,0,1), ar=.6, ma=.9), n=100)
+arma10 <- arima.sim(list(order=c(1,0,0), ar=.6), n=100)
+arma01 <- arima.sim(list(order=c(0,0,1), ma=.9), n=100)
+
+# compute and plot the sample ACFs and PACFs of the three series
+max_lag <- 30
+ACF1 <- acf1(arma11, max_lag, main = "")
+PACF1 <- acf1(arma11, max_lag, pacf = T, main = "")
+
+ACF2 <- acf1(arma10, max_lag, main = "")
+PACF1 <- acf1(arma10, max_lag, pacf = T, main = "")
+
+ACF3 <- acf1(arma01, max_lag, main = "")
+PACF1 <- acf1(arma01, max_lag, pacf = T, main = "")
+```
+
+The results appear somewhat identical to the results we obtained for the theoretical ACFs and PACFs, but the confidence bounds extend much wider from zero. Specifically;
+
+- **ARMA(1,1):**
+
+Apart from the cyclical behavior observed, the sample ACF and PACF for the ARMA(1,1) look roughly the same as their corresponding theoretical counterparts in part (a). We do see more spikes but these additional spikes are essentially not significant since they fall within the confidence bounds. 
+
+
+- **ARMA(1,0):**
+
+The sample PACF is approximately identical to the corresponding theoretical PACF. Both sample and theoretical PACFs cut off at lag 1, while the theoretical ACF tails off but the sample ACF appear to cut off after lag 2. 
+
+
+- **ARMA(0,1):**
+
+While the theoretical ACF clearly cuts off at lag 1, the sample ACF appears to cut off at lag 2. However, the sample PACF is roughly identical to the theoretical PACF.
+
+
+## Part (c)
+
+Generally, the variations around the sample ACFs and PACFs for $n=100$ are larger than the variations around the sample ACFs and PACFs when $n=500$. When we increased the sample size to 500, we obtained tight confidence bounds around zero. In this case, the sample ACFs and PACFs look very much identical to the corresponding theoretical ACFs and PACFs for all three models.
+
+
+Overall, the results from parts (a) - (c) confirm the large sample distributional properties of the ACF and the PACF we have studied. 
+
+
+```{r fig44c, out.width="50%", fig.ncol=2, fig.cap="Comparing sample ACF and PACF of simulated series from ARMA(1,1), an ARMA(1,0), and an ARMA(0,1) for $\\phi=0.6$, $\\theta=0.9$. $n=500$ observations were generated.", fig.subcap=c('Sample ACF of series simulated from ARMA(1,1)', 'Sample PACF of of series simulated from ARMA(1,1)', 'Sample ACF of of series simulated from ARMA(1,0)', 'Sample PACF of of series simulated from ARMA(1,0)','ACF of ARMA(0,1)', 'Sample PACF of of series simulated from ARMA(0,1)')}
+
+# ---------- Problem 4.4 (c)
+
+# Generate n=100 observations from each of the 3 models in part (a)
+arma11 <- arima.sim(list(order=c(1,0,1), ar=.6, ma=.9), n=500)
+arma10 <- arima.sim(list(order=c(1,0,0), ar=.6), n=500)
+arma01 <- arima.sim(list(order=c(0,0,1), ma=.9), n=500)
+
+# compute and plot the sample ACFs and PACFs of the three series
+ACF1 <- acf1(arma11, 24, main = "")
+PACF1 <- acf1(arma11, 24, pacf = T, main = "")
+
+ACF2 <- acf1(arma10, 24, main = "")
+PACF1 <- acf1(arma10, 24, pacf = T, main = "")
+
+ACF3 <- acf1(arma01, 24, main = "")
+PACF1 <- acf1(arma01, 24, pacf = T, main = "")
+
+
+```
+
+
+# Problem 4.5
+
+## Part (a)
+
+```{r fig45a, out.width="50%", fig.ncol=2, fig.cap="Original cardiovascular mortality series versus its differenced series", fig.subcap=c('Original series', '1st order differenced series')}
+# difference the mortality series
+xt <- diff(cmort, lag = 1)
+
+culer = c(rgb(.66,.12,.85), rgb(.12,.66,.85), rgb(.85,.30,.12))
+tsplot(cmort, col = culer[1], type="o", pch=19, ylab="") # origianl
+tsplot(xt, col = culer[1], type="o", pch=19, ylab="") # differenced
+```
+
+The original series appears to exhibit cyclical behavior (has strong seasonal component) with a downward trend over time on top of it. Here, differencing appears reasonable because it succeeded in eliminating the trend and at the same time coercing the series to stationarity as the plot of the differenced series resembles a white noise process.
+
+
+## Part (b)
+
+Plots of the calculated ACF and PACF values are shown in Figure \@ref(fig:fig45b). 
+
+```{r fig45b, out.width="50%", fig.ncol=2, fig.cap="Sample ACF and PACF plots of the differenced cardiovascular mortality series.", fig.subcap=c('Sample ACF', 'Sample PACF')}
+
+# calculate and plot the sample ACF and PACF
+ACF <- acf1(xt, 48, main = "")
+PACF <- acf1(xt, 48, pacf = T, main = "")
+
+```
+
+According to Table 4.1 in [@shumway2019time], the results in Figure \@ref(fig:fig45b) suggest that an AR(1) is appropriate for $x_t$, since the ACF tails off but the PACF cuts off at lag 1 (that is, it only has a large value for h=1 and then it is essentially zero for higher-order lags).
+
+
+## Part (c)
+
+We fitted an AR(1) model to $x_t$ (first order differenced cardiovascular mortality) using the maximum likelihood via unconditional least squares with the help of the `sarima` script from `astsa`. We are working with a differenced data so we set $d=0$. Additionally, the differenced data appear to have a zero mean function (see plot (b) in Figure \@ref(fig:fig45a)) so we did not fit a mean to the data by specifying `no.constant=TRUE`. 
+
+The first output that follows shows the number of iterations performed until convergence. Diagnostic plots are shown in Figure \@ref(fig:fig45c), while the relevant estimates for the model parameters are presented in Table \@ref(tab:tab45c).
+
+
+```{r fig45c, fig.cap="Rsidual diagnostics plots for the AR(1) model.", comment=""}
+
+#---------- Problem 4.5 (c): model fitting
+ar_fit <- sarima(xt, p=1, d=0, q=0, no.constant = TRUE)
+
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    ar_fit$ttable,
+    c(ar_fit$fit$sigma2, rep(NA, 3)),
+    c(ar_fit$AIC, rep(NA, 3)),
+    c(ar_fit$BIC, rep(NA, 3))
+)) 
+rownames(result_tbl) <- c("AR1", "Sigma^2", "AIC", "BIC")
+
+```
+
+```{r tab45c}
+## display table of results 
+options(knitr.kable.NA='')  # suppress NAs from table output
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "lcccc", digits=4,
+          caption = "Maximum likelihood (unconditional least squares) estimates for the AR(1) model fitted to $x_t$", na="") |>
+    pack_rows("Coefficients", 1, 1) |>
+    pack_rows("Other metrics", 2, 4) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+
+
+According to Table \@ref(tab:tab45c), the final estimates are $\hat{\phi} = -0.5064$ with standard error $0.0383$ and $\hat{\sigma}_w^2 = 33.81$. The ratio of the estimated coefficient to its standard error is substantially larger than 0 (p-value $\approx 0$), so the regression parameter estimate is significant. The white noise variance is estimated as `33.81`.
+
+
+## Part (d)
+
+```{r fig45d, out.width="75%", fig.cap="Plot of the residuals of the fit of AR(1) to $x_t$."}
+tsplot(resid(ar_fit$fit), col = 4, ylab = "Residuals")
+```
+
+We examined the residuals using a plot of the residuals over time and the ACF of the residuals plot as presented in Figures \@ref(fig:fig45d) and \@ref(fig:fig45c), respectively. The plot of the residuals behave like a white noise process, which is also evident from the corresponding ACF plot of the residuals where the autocorrelation values after lag 0 are significantly not different from zero. In this case, we conclude that the residuals are white.
+
+
+
+
+\newpage
+
+<!-- - Robert H. Shumway, & David S. Stoffer. (2019). Time Series: A Data Analysis Approach Using R. -->
+
+# Appendix: R codes {-} 
+
+
+<!-- all R codes are extracted into this chunk -->
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```
+
+
+# References{-} 
+
+
+
+
+
+
+

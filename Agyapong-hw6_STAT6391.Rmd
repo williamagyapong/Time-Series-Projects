@@ -1,0 +1,242 @@
+---
+title: '`r params$hw_title`'
+subtitle: "Time Series Analysis (STAT 6391) "
+author: 
+ - Willliam Ofosu Agyapong^[woagyapong@miners.utep.edu, PhD Data Science, University of Texas at El Paso (UTEP).]
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  bookdown::pdf_document2:
+    fig_caption: true
+    keep_tex: yes
+    latex_engine: xelatex
+    number_sections: no
+    toc: false
+    # toc_depth: 4
+    extra_dependencies: "subfig"
+header-includes:
+- \usepackage{amsmath}
+- \usepackage{amssymb}
+- \usepackage{amsfonts}
+- \usepackage{amsthm}
+- \usepackage{esvect}
+- \usepackage{floatrow}
+- \usepackage{float}
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhf{}
+- \rhead{William O. Agyapong}
+- \lhead{`r params$hw_title`}
+- \cfoot{\thepage}
+- \usepackage{algorithm}
+- \usepackage[noend]{algpseudocode}
+geometry: margin = 1in
+fontsize: 10pt
+params:
+  hw_title: Homework 6
+bibliography: ../references.bib
+link-citations: yes
+linkcolor: blue
+nocite: | 
+    @shumway2019time
+ 
+---
+
+
+```{r setup, include=FALSE}
+# Set global options for output rendering
+knitr::opts_chunk$set(eval = T, echo = F, warning = F, message = F, 
+                      fig.pos = "H", out.extra = "", fig.align = "center",
+                      cache = F, comment="")
+
+#----------------- Load required packages
+# library(dplyr)
+library(knitr)
+library(kableExtra)
+# library(broom)
+library(stats)
+library(astsa)
+
+  
+#----------------- set the current working directory to the file path
+setwd(dirname(rstudioapi::getSourceEditorContext()$path)) 
+
+
+```
+
+
+
+
+<!-- \noindent\rule{17.5cm}{0.8pt} -->
+
+\newpage
+
+# Problem 4.5 
+
+# Part (e)
+
+The forecasts over a four-week horizon based on the AR(1) model fitted to the differenced mortality series, $x_t$, are shown in Figure 1 (See forecasted values in Table 1) with a 95% prediction band around them. The solid horizontal blue line represents the mean of the series. It can be seen that the forecasts appear to be leveling off after from the third week. 
+
+```{r fig45e, out.width="75%", fig.cap="Four-week forcasts for the first-order differenced cardiovascular mortality series ($x_t$). The forecasts are displayed in red with 95\\% prediction intervals."}
+
+#---------- Problem 4.5 (e): forecasting
+
+# obtain the differenced mortality series
+xt <- diff(cmort, lag = 1)
+sarima_forcast <- sarima.for(xt, n.ahead = 4, p=1, d=0, q=0)
+abline(h=0, col=4) # display the zero mean
+
+
+```
+The forecasts are presented in Table 1 below. 
+
+```{r}
+# A table of the forecased values
+forecasts <- rbind(sarima_forcast$pred) # get the forcasts
+forecasts <- data.frame(desc="$x_{n+m}^n$", forecasts)
+names(forecasts) <- c("m", 1:4)
+kable(forecasts, booktabs=T, linesep="", align = "lcccc", escape = F,
+          caption = "Forecasts over a four-week horizon") |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+
+
+## Part (f)
+
+In the previous assignment (Homework 5), we obtained the following estimates from the fitted AR(1) model.  
+
+```{r include=FALSE}
+
+#---------- Problem 4.5 (f): model fitting
+ar_fit <- sarima(xt, p=1, d=0, q=0, no.constant = TRUE)
+
+# collect relevant model outputs into a table
+result_tbl <- data.frame(rbind(
+    ar_fit$ttable,
+    c(ar_fit$fit$sigma2, rep(NA, 3)),
+    c(ar_fit$AIC, rep(NA, 3)),
+    c(ar_fit$BIC, rep(NA, 3))
+)) 
+rownames(result_tbl) <- c("AR1", "Sigma^2", "AIC", "BIC")
+```
+
+```{r}
+## display table of results 
+options(knitr.kable.NA='')  # suppress NAs from table output
+result_tbl |>
+    kable(booktabs=T, linesep="", align = "lcccc", digits=4,
+          caption = "Maximum likelihood (unconditional least squares) estimates for the AR(1) model fitted to $x_t$", na="") |>
+    pack_rows("Coefficients", 1, 1) |>
+    pack_rows("Other metrics", 2, 4) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+
+
+```{r eval=FALSE}
+# generating the forecasts manually
+phi_hat <- -0.5064
+xn <- xt[length(xt)] # -3.94
+for(i in 1:4){
+    print(xn*phi_hat^i)
+}
+
+```
+
+
+
+The forecasted values in part (e) were obtained as follows:
+
+We know that for an AR(1) model, the m-step-ahead forecast is given by 
+
+$$x_{n+m}^n = \phi^mx_n$$
+So, for m = 1, 2, 3, 4, $x_n = -3.94$, and using the estimate of $\phi$ obtained from the fitted model (see Table 2) we have 
+
+$$x_{n + 1}^n = \phi x_n = \hat{\phi} x_n = -0.5064\times-3.94 = 1.995216$$
+
+$$x_{n + 2}^n = \phi^2 x_n = \hat{\phi}^2 x_n = -0.5064^2\times-3.94 = -1.010377$$
+$$x_{n + 3}^n = \phi^3 x_n = \hat{\phi}^3 x_n = -0.5064^3\times-3.94 = 0.5116551$$
+$$x_{n + 4}^n = \phi^4 x_n = \hat{\phi}^4 x_n = -0.5064^4\times-3.94 = -0.2591021$$
+
+
+We note a slight variation between the results we have here and the ones obtained in part (e).
+
+
+
+## Part (g)
+
+<!-- With reference to the following prediction output,  -->
+Denote the actual values of the cardiovascular mortality by $c_t, \quad t=1, 2, \dots$.
+
+Recall that $x_t = c_t - c_{t-1}$. So $x_{n+1} = c_{n+1} - c_n \Rightarrow x_{n+1}^n = c_{n+1}^n - c_n^n$. Hence 
+
+$$c_{n+1}^n = x_{n+1}^n + c_n^n$$
+$$\qquad\qquad\qquad\qquad\qquad = 1.95554 + 85.49 = 87.44554.$$
+
+Therefore, the one-step-ahead forecast of the actual value of cardiovascular mortality is `87.44554`.
+
+
+
+# Problem 4.8
+
+The MLEs of the three parameters for each one of the 10 generated realizations are presented in Table 3, from which we observe that the estimates (MLEs) of the three parameters are close to their corresponding true values. The averages of the 10 estimates for each parameter are approximately equal (within one decimal place) to the true values. 
+
+```{r}
+
+##---------- Problem 4.8 codes
+set.seed(1234) # seed for reproducibility of results
+replicates <- 10
+# initialize container to store MLEs
+param_estimate <- matrix(NA, nrow = replicates, ncol = 3)
+for (i in 1:replicates) {
+    # Generate 10 realizations of length n=200 each of an ARMA(1,1) process
+    arma11 <- arima.sim(list(order=c(1,0,1), ar=.9, ma=.5), n=200, sd=1)
+    # Fit arima model to obtain MLEs of the parameters
+    arima_fit <- arima(arma11, order = c(1,0,1))
+    param_estimate[i,1] <- arima_fit$coef[1]
+    param_estimate[i,2] <- arima_fit$coef[2]
+    param_estimate[i,3] <- arima_fit$sigma2
+}
+
+avg <- apply(param_estimate, 2, mean) # compute the means for comparsion
+param_estimate <- data.frame(type=c("MLEs", rep("",9), "Average", "True values"),
+                             rbind(param_estimate, avg, c(0.9, 0.5,1)))
+names(param_estimate) <- c("","phi", "theta", "sigma2")
+
+rownames(param_estimate) <- NULL
+
+# display output in a nice formatted tables
+kable(param_estimate, booktab=T, align = "c", digits = 3, linesep="", escape = F,
+      col.names = c("","$\\phi$", "$\\theta$", "$\\sigma^2$"),
+      caption = "MLEs obtained for each of the 10 realizations of n=200 each of an ARMA(1,1) process with $\\phi=.9$, $\\theta=.5$ and $\\sigma^2=1$ together with their averages over the 10 values. ") |>
+    pack_rows("",1,10) |>
+    pack_rows("",11,11) |>
+    pack_rows("", 12,12) |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+
+```
+
+
+
+\newpage
+
+<!-- - Robert H. Shumway, & David S. Stoffer. (2019). Time Series: A Data Analysis Approach Using R. -->
+
+# Appendix: R codes {-} 
+
+
+<!-- all R codes are extracted into this chunk -->
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```
+
+
+# References{-} 
+
+
+
+
+
+
+

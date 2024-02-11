@@ -1,0 +1,218 @@
+---
+title: '`r params$hw_title`'
+subtitle: "Time Series Analysis (STAT 6391) "
+author: 
+ - Willliam Ofosu Agyapong^[woagyapong@miners.utep.edu, PhD Data Science, University of Texas at El Paso (UTEP).]
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  bookdown::pdf_document2:
+    fig_caption: true
+    keep_tex: yes
+    latex_engine: xelatex
+    number_sections: no
+    toc: false
+    # toc_depth: 4
+    extra_dependencies: "subfig"
+header-includes:
+- \usepackage{amsmath}
+- \usepackage{amssymb}
+- \usepackage{amsfonts}
+- \usepackage{amsthm}
+- \usepackage{esvect}
+- \usepackage{floatrow}
+- \usepackage{float}
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhf{}
+- \rhead{William O. Agyapong}
+- \lhead{`r params$hw_title`}
+- \cfoot{\thepage}
+- \usepackage{algorithm}
+- \usepackage[noend]{algpseudocode}
+geometry: margin = 1in
+fontsize: 10pt
+params:
+  hw_title: Homework 4
+# bibliography: references.bib
+link-citations: yes
+linkcolor: blue
+# nocite: |
+ 
+---
+
+
+```{r setup, include=FALSE}
+# Set global options for output rendering
+knitr::opts_chunk$set(eval = T, echo = F, warning = F, message = F, 
+                      fig.pos = "H", out.extra = "", fig.align = "center",
+                      cache = F)
+
+#----------------- Load required packages
+# library(dplyr)
+# library(knitr)
+# library(kableExtra)
+# library(broom)
+library(stats)
+library(astsa)
+
+  
+#----------------- set the current working directory to the file path
+setwd(dirname(rstudioapi::getSourceEditorContext()$path)) 
+
+
+```
+
+
+
+
+<!-- \noindent\rule{17.5cm}{0.8pt} -->
+
+\newpage
+
+# Problem 3.6
+
+## Part (a)
+
+Figure \@ref(fig:fig36a) is a graph of the glacial varve data (a) along with histograms of the original data (c) and a log transformed version (b). The computed sample variances are shown in green, from which we see that the variance of the second half of the Glacial data far exceeds (more than 4 times) the first half of the data. This is a clear sign of unequal variance over the course of the series, thus supporting the fact that the series exhibits heteroscedasticity. 
+
+We can indeed argue from plot (b) that the log transformation stabilizes the data as the variance of the second half is now about twice as large as that of the first half. And again, comparing the histogram in plot (c) to the one in plot (d), we can argue that the approximation to normality is improved by the the log transformation as the histogram of $y_t$ is roughly symmetric.
+
+
+```{r fig36a, out.width="50%", fig.ncol=2, fig.cap="Glacial varve series and histograms. Numbers in green represent the sample variances over the first and second halves of the data on the left and right side of the dotted red line, respectively.", fig.subcap=c('Glacial varve thicknesses from Massachusetts', 'Log transformed glacial varve thickness series', 'Histogram of original varve data', 'Histogram of log transformed varve data')}
+
+#---------- Problem 3.6 codes
+
+x1 <- varve[1:317]      # first half
+x2 <- varve[318:634]    # second half
+# var(x1); var(x2)
+
+# log transformation
+yt <- log(varve)
+y1 <- yt[1:317]      # first half
+y2 <- yt[318:634]    # second half
+# plot the varve series
+tsplot(varve, col = 4, ylab = "")
+abline(v=length(varve)/2, col=2, lty=2)
+text(x=150, y=140, round(var(x1),2), col=3)
+text(x=460, y=140, round(var(x2),2), col=3)
+
+# plot the log transformed series
+tsplot(yt, col = 4, ylab = "")
+abline(v=length(yt)/2, col=2, lty=2)
+text(x=150, y=4.6, round(var(y1),2), col=3)
+text(x=500, y=4.6, round(var(y2),2), col=3)
+
+# histograms
+hist(varve, main = "", col=4)
+hist(yt, main = "", col=4)
+
+
+```
+ 
+
+## Part (b)
+
+```{r fig36b, out.width="50%", fig.ncol=2, fig.cap="Log transformed varve series along with the global temperature records (only shown here for comparison).", fig.subcap=c('', '')}
+# plot the log transformed series
+tsplot(yt, col = 4, ylab = "", main = "Logged glacial varve")
+
+# bring in the global temperature figure for comparison
+culer = c(rgb(.85,.30,.12,.6), rgb(.12,.65,.85,.6))
+tsplot(gtemp_land, col=culer[1], lwd=2, type="o", pch=20,
+ylab="Temperature Deviations", main="Global Warming")
+lines(gtemp_ocean, col=culer[2], lwd=2, type="o", pch=20)
+legend("topleft", col=culer, lty=1, lwd=2, pch=20, legend=c("Land
+Surface", "Sea Surface"), bg="white")
+
+
+```
+
+A plot of the series $y_t$ (log transformed glacial varve) is again shown in in Figure \@ref(fig:fig36b) along with the global temperature records. From this plot (a), we can say that some time intervals, of the order 100 years, exists especially between times 200 and 450 with an upward trend similar to the upward trend observed in the global temperature records during the latter part of the twentieth century as seen in plot (b).
+
+
+## Part (c)
+
+We examined the sample ACF of the log transformed series using an ACF plot as shown in \@ref(fig:fig36c). The autocorrelation at different lags are significant but decays as the lag increases. It is clear from this plot that the data is not stationary.
+
+```{r fig36c, out.width="70%", fig.cap="Sample ACF of the log transformed glacial varve"}
+
+# examine the sample ACF of yt and comment
+sample_acf <- acf1(yt, plot = T, main = "")
+
+```
+
+
+## Part (d)
+
+The computed differenced data is shown in Figure \@ref(fig:fig36d) along with the corresponding sample ACF. The differenced series appear centered around zero with a stable variance, and virtually all the autocorrelations appear non-significant which resemble that of a white noise process. It is therefore evident that differencing the logged varve data produced a reasonably stationary series.
+
+A practical interpretation of $\mu_t = y_t - y_{t-1}$ is that it coerces a nonstationary series into a stationary one.
+
+
+
+
+```{r fig36d, out.width="50%", fig.ncol=2, fig.cap="Differenced loggged glacial varve series and its sample ACF.", fig.subcap=c('Differenced series', 'Sample ACF')}
+
+# compute the difference
+ut <- diff(yt, lag=1)
+
+# generate plot of the series
+tsplot(ut, col=4, ylab = "")
+
+# create the ACF plot
+sample_acf <- acf1(ut, plot = T, main = "")
+
+#---------- END
+```
+
+
+# Problem 3.8
+
+In this problem, our goal is to investigate the presence or otherwise of a strong 4-year cycle.
+
+
+
+```{r fig38, fig.cap="The Southern Oscilation Index (SOI) series with a sinusoidal fit to the SOI (red line)  and a lowess fit of SOI (green line)"}
+#---------- Problem 
+# A sinusoidal fit to the SOI data
+t <- time(soi)
+z1 <- cos(2*pi*t/4) # time in months
+z2 <- sin(2*pi*t/4)
+sinu_fit <- lm(soi ~  t + z1 + z2)
+# summary(sinu_fit)
+tsplot(soi, col="gray", ylab = "")
+fitted_vals <- ts(fitted(sinu_fit), frequency = 12, start = 1950, end = 1987)
+# lines(fitted(sinu_fit), col=2, lwd=2)
+lines(fitted_vals, col=2, lwd=2)
+lines(lowess(soi, f=.05), lwd=2, col=3) # El Niño cycle
+legend("bottomleft", legend = c("Sinusoidal fit", "lowess fit"), 
+       col = c(2, 3), lty = 1)
+#---------- END
+```
+
+
+According to Figure \@ref(fig:fig38), the sinusoidal fit compares reasonably well to the lowess fit (except at the tail end of the last decade where the trends are in opposite directions) in terms of the rises and falls, accentuating the presence of a 4-year cycle. There is approximately one cycle every four years. Thus, there is a strong 4-year cycle in the SOI series.
+
+
+
+\newpage
+
+# References{-} 
+
+- Robert H. Shumway, & David S. Stoffer. (2019). Time Series: A Data Analysis Approach Using R.
+
+# Appendix: R codes {-} 
+
+
+<!-- all R codes are extracted into this chunk -->
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```
+
+
+
+
+
+
+
+

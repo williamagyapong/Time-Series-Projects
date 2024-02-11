@@ -1,0 +1,454 @@
+---
+title: 'Homework 3: `r params$hw_title`'
+subtitle: "Time Series Analysis (STAT 6391) "
+author: 
+ - Willliam Ofosu Agyapong^[woagyapong@miners.utep.edu, PhD Data Science, University of Texas at El Paso (UTEP).]
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  bookdown::pdf_document2:
+    fig_caption: true
+    keep_tex: yes
+    latex_engine: xelatex
+    number_sections: no
+    toc: false
+    # toc_depth: 4
+    extra_dependencies: "subfig"
+header-includes:
+- \usepackage{amsmath}
+- \usepackage{amssymb}
+- \usepackage{amsfonts}
+- \usepackage{amsthm}
+- \usepackage{esvect}
+- \usepackage{floatrow}
+- \usepackage{float}
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhf{}
+- \rhead{William O. Agyapong}
+- \lhead{`r params$hw_title`}
+- \cfoot{\thepage}
+- \usepackage{algorithm}
+- \usepackage[noend]{algpseudocode}
+geometry: margin = 1in
+fontsize: 10pt
+params:
+  hw_title: Time Series Analysis Homework 3
+# bibliography: references.bib
+link-citations: yes
+linkcolor: blue
+# nocite: |
+ 
+---
+
+
+```{r setup, include=FALSE}
+# Set global options for output rendering
+knitr::opts_chunk$set(eval = T, echo = F, warning = F, message = F, 
+                      fig.pos = "H", out.extra = "", fig.align = "center",
+                      cache = F)
+
+#----------------- Load required packages
+# library(dplyr)
+library(knitr)
+library(kableExtra)
+library(broom)
+library(stats)
+library(astsa)
+
+  
+#----------------- set the current working directory to the file path
+setwd(dirname(rstudioapi::getSourceEditorContext()$path)) 
+
+
+```
+
+
+
+
+<!-- \noindent\rule{17.5cm}{0.8pt} -->
+
+\newpage
+
+# Problem 2.10
+
+ 
+
+# Problem 2.11
+
+
+## Part (a)
+
+In this problem, we simulated 500 Gaussian white noise observations and computed the sample ACP to lag 20 which are shown in Figure 1. For a white noise process, we know that the theoretical ACF is given by 
+
+$$\rho_x(h) = \begin{cases} 1 \qquad h=0\\ 0 \qquad h\neq0\end{cases}.$$
+From plot (b) in Figure \@ref(fig:fig211a), it is clear that the sample ACF from the simulated white noise process is approximately about the same as the theoretical ACF as most of the sample ACF values are approximately zero for $h\neq 0$ and of course 1 at lag 0. 
+
+
+<!-- see example 2.27 -->
+
+```{r fig211a, out.width="50%", fig.ncol=2, fig.cap="Sample autocorrelation function of a Gaussian white noise process up to lag 20. The white noise process is in the left panel.", fig.subcap=c('White noise process for n=500.','Sample autocorrelation function up to lag 20.')}
+
+#---- Problem 2.11, part (a)
+
+n <- 500
+wn <- rnorm(n)  # generate the white noise process
+tsplot(wn, col = 4, ylab = "")
+sample_acf <- acf(wn, lag.max = 20, plot = T)
+
+
+```
+
+## Part (b)
+
+Now, we repeat what we did in part (a) using only $n=50$ this time.  
+
+From plot (a) in Figure \@ref(fig:211b), we can observe that decreasing the sample size (n) to 50 resulted in increased variability in the sample ACF.
+
+```{r fig211b, out.width="50%", fig.ncol=2, fig.cap="Sample autocorrelation function of a Gaussian white noise process up to lag 20. The white noise process is in the left panel.", fig.subcap=c('White noise process for n=50.','Sample autocorrelation function up to lag 20.')}
+
+#---- Problem 2.11, part (b)
+n <- 50
+wn <- rnorm(n)  # generate the white noise process
+tsplot(wn, col = 4, ylab = "")
+sample_acf <- acf(wn, lag.max = 20, plot = T)
+# sample_acf
+
+
+```
+
+
+# Problem 2.13
+
+We simulated a series of $n=500$ moving average observations based on the AR model below: 
+
+$$ x_t = 1.5x_{t-1} - .75x_{t-2} + w_t.$$
+
+The simulated series and its corresponding ACF to lag 50 are shown in Figure \@ref(fig:fig213a). The sample ACF plot is somewhat periodic which reveals the approximate cyclical behavior of the data. 
+
+
+
+
+```{r fig213a, out.width="50%", fig.ncol=2, fig.cap="A simulated AR(2) process with autocorrelation function up to lag 50.", fig.subcap=c('500 observations from AR(2) model.','Sample autocorrelation function up to lag 50.')}
+
+#-------- Problem 2.13
+set.seed(123)
+wn <- rnorm(500 + 50)
+ar <- filter(wn, filter = c(1.5, -.75), method = "recursive")[-(1:50)]
+
+# par(mfrow=2:1)
+tsplot(ar , col="dodgerblue", ylab = "")
+sample_acf <- acf1(ar, 50)
+# sample_acf
+```
+
+
+# Problem 3.1
+
+## Part (a)
+
+In this problem, we fitted the regression model 
+
+$$x_t = \beta t + \alpha_1Q_1(t) + \alpha_2Q_2(t) + \alpha_3Q_3(t)+ \alpha_4Q_4(t) + w_t$$
+where $Q_i(t) = 1$ if time $t$ corresponds to quarter $i=1,2,3,4$, and zero otherwise. $w_t$ is assumed to be a Gaussian white noise sequence.
+
+Results from the fitted model are provided in Tables \@ref(tab:tab31a) and \@ref(tab:tab31a2).
+
+```{r tab31a}
+#--- Problem 3.1 (a): fitted model and model statistics
+
+trend <- time(jj) - 1970    # helps "center" the time
+Q <- factor(cycle(jj))      # make quarterly factors
+reg_mod <- lm(log(jj) ~ 0 + trend + Q, na.action = NULL) # no intercept model
+# head(model.matrix(reg_mod))
+
+# summary(reg_mod)
+tidy(reg_mod, conf.int = T) |>
+    dplyr::mutate(
+        dplyr::across(-c(term,p.value), round, 3),
+        `95% CI` = stringr::str_glue("[{conf.low}, {conf.high}]"),
+        .before = "p.value",
+        p.value = gtsummary::style_pvalue(p.value)
+        ) |>
+    dplyr::rename(`t statistic` = statistic) |>
+    dplyr::select(-c(conf.low, conf.high)) |>
+    kable(booktabs=T, linesep="", align = "lccccc",
+          caption = "Structural Regression Model estimates for the logged Johnson and Johnson data.") |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+
+
+```
+
+```{r tab31a2}
+
+#--- Problem 3.1 (a): overall model performance statistics
+ glance(reg_mod) |>
+        dplyr::select(r.squared, adj.r.squared, sigma, statistic, df,df.residual,  p.value) |>
+        dplyr::mutate(dplyr::across(-p.value, round,3),
+            p.value = gtsummary::style_pvalue(p.value)) |>
+    kable(booktabs=T, linesep = "",
+          caption = "Overall model performance statistics.", escape = F, align = "ccccc",
+          col.names = c("$R^2$", "Adjusted $R^2$", "Residual std.error", "F stat", "df", "df residual", "p-value")) %>%
+        kable_styling(latex_options = c("HOLD_position", "repeat_header")) |>
+    kable_classic()
+
+
+```
+
+
+
+## Part (b)
+
+According to Table \@ref(tab:tab31a) in part (a), if the model is correct, then the estimated average annual increase in the logged earnings per share is about 0.167 (as measured by the coefficient of the trend component).
+
+## Part (c)
+
+From Table \@ref(tab:tab31a) in part (a), the estimated coefficients associated with the third and fourth quarters are **1.151** and **0.882**, respectively, suggesting that the average logged earnings rate decreased from the third quarter to the fourth quarter by approximately 23.35%. 
+
+
+```{r}
+
+# part (c): percent change
+b <- coef(reg_mod)
+percent_change <- abs(b[5]-b[4])*100/b[4]
+
+
+```
+
+## Part (d) 
+
+When we included intercept term in the model, the intercept term absorbed the first quarter term as we see that the estimated intercept coefficient in Table \@ref(tab:tab31d) is exactly the same as the estimated coefficient for the first quarter in Table \@ref(tab:tab31a) in part (a). We also note that the second quarter term was rendered insignificant (p-value > .05) which nullifies the effect of the second quarter and makes it impossible to predict movements over that period.
+
+
+```{r tab31d}
+# attempt to include intercept term in the model
+reg_mod2 <- lm(log(jj) ~ trend + Q, na.action = NULL) 
+# summary(reg_mod2)
+
+tidy(reg_mod2, conf.int = T) |>
+    dplyr::mutate(
+        dplyr::across(-c(term,p.value), round, 3),
+        `95% CI` = stringr::str_glue("[{conf.low}, {conf.high}]"),
+        .before = "p.value",
+        p.value = gtsummary::style_pvalue(p.value)
+        ) |>
+    dplyr::rename(`t statistic` = statistic) |>
+    dplyr::select(-c(conf.low, conf.high)) |>
+    kable(booktabs=T, linesep="", align = "lccccc",
+          caption = "Structural Regression Model estimates for the logged Johnson and Johnson data with an intercept term.") |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+
+```
+
+```{r tab31d2}
+
+#--- Problem 3.1 (a): overall model performance statistics
+ glance(reg_mod2) |>
+        dplyr::select(r.squared, adj.r.squared, sigma, statistic, df,df.residual,  p.value) |>
+        dplyr::mutate(dplyr::across(-p.value, round,3),
+            p.value = gtsummary::style_pvalue(p.value)) |>
+    kable(booktabs=T, linesep = "",
+          caption = "Overall model performance statistics from the model with intercept term.", escape = F, align = "ccccc",
+          col.names = c("$R^2$", "Adjusted $R^2$", "Residual std.error", "F stat", "df", "df residual", "p-value")) %>%
+        kable_styling(latex_options = c("HOLD_position", "repeat_header")) |>
+    kable_classic()
+
+
+```
+
+
+## Part (e)
+
+Figure \@ref(fig:fig31e) presents a plot of the logged Johnson & Johnson data (blue) with the regression fitted values (red) along with two other plots of the residuals.
+
+We used the normal QQ plot and the residuals plot to examine the residuals. According to plot (b), the distribution of the residuals appear Gaussian. However, the residuals plot shows clear increasing and decreasing pattern, a sign of non-constant residual variance which contradicts the assumption that $w_t$ is white. Therefore, the residuals do not look white and thus the model appears does not fit the data well. We see from plot (c) that the model over fits the data. 
+
+```{r fig31e, out.width="50%", fig.ncol=2, fig.cap="Residual diagnostic plots and logged data with fitted regression line superimposed.", fig.subcap=c('', '', '')}
+
+# examine the residuals 
+tsplot(ts(resid(reg_mod)), ylab = "Residual", main = "Residual plot")
+plot(reg_mod, 2)    # normal qqplot
+
+# data with fitted regeression line
+tsplot(log(jj), col = 4, main = "Logged data with fitted regression superimposed")
+lines(fitted(reg_mod), col=2)
+legend("topleft", legend = c("Logged data", "Fitted values"), lty = 1, col = c(4,2))
+```
+ 
+
+
+
+
+# Problem 3.2
+
+## Part (a) 
+
+
+We added another component $P_{t-4}$ to the regression in (3.17) of the text that accounts for the particulate count four weeks prior. The fitted regression
+results are presented in Tables \@ref(tab:tab32a) and \@ref(tab:tab32a2). This model accounts for **60.8%** of the total variability in the weekly mortality.
+
+From Table \@ref(tab:tab32a), the lagged term (`part4`) for the particulate count four weeks prior is significant (p<.001), confirming the observation that mortality peaks a few weeks after pollution peaks.
+
+```{r tab32a}
+
+#------ Problem 3.2 
+
+temp <- tempr - mean(tempr) # center temperature
+temp2 <- temp^2
+trend <- time(cmort) # time is trend
+fit <- lm(cmort~ trend + temp + temp2 + part, na.action=NULL)
+
+
+# add the lagged variable in terms of the particulate count four weeks prior
+dat <- ts.intersect(cmort, trend, temp, temp2, part, part4=lag(part,-4))
+new_fit <- lm(cmort~ trend + temp + temp2 + part + part4, data = dat, na.action=NULL)
+# regression results
+tidy(new_fit, conf.int = T) |>
+    dplyr::mutate(
+        dplyr::across(-c(term,p.value), round, 3),
+        `95% CI` = stringr::str_glue("[{conf.low}, {conf.high}]"),
+        .before = "p.value",
+        p.value = gtsummary::style_pvalue(p.value)
+        ) |>
+    dplyr::rename(`t statistic` = statistic) |>
+    dplyr::select(-c(conf.low, conf.high)) |>
+    kable(booktabs=T, linesep="", align = "lccccc",
+          caption = "Regression estimates for the Polulution, Temperature and Mortality data with a lagged variable. ") |>
+    kable_styling(latex_options = c("HOLD_position")) |>
+    kable_classic()
+```
+
+
+```{r tab32a2}
+
+#--- Problem 3.1 (a): overall model performance statistics
+ glance(new_fit) |>
+        dplyr::select(r.squared, adj.r.squared, sigma, statistic, df,df.residual,  p.value) |>
+        dplyr::mutate(dplyr::across(-p.value, round,3),
+            p.value = gtsummary::style_pvalue(p.value)) |>
+    kable(booktabs=T, linesep = "",
+          caption = "Overall performance statistics for the model.", escape = F, align = "ccccc",
+          col.names = c("$R^2$", "Adjusted $R^2$", "Residual std.error", "F stat", "df", "df residual", "p-value")) %>%
+        kable_styling(latex_options = c("HOLD_position", "repeat_header")) |>
+    kable_classic()
+
+
+```
+
+
+## Part (b)
+
+Table \@ref(tab:tab32b) presents AIC and BIC values computed from both models for comparison.  We notice that both AIC and BIC decreased for the new model with the lagged variable, thus showing an improvement over the final model in Example 3.5 of Shumway et al. (2019). 
+
+```{r tab32b}
+
+## compute the AIC and BIC 
+
+# for the original model referenced
+num <- length(cmort)    # sample size
+aic <- AIC(fit)/num - log(2*pi) # AIC
+bic <- BIC(fit)/num - log(2*pi) # BIC
+
+# for the new model
+n <- nrow(dat)          # new sample size
+new_aic <- AIC(new_fit)/n - log(2*pi)
+new_bic <- BIC(new_fit)/n - log(2*pi)
+result_df <- data.frame(rbind(round(c(aic, bic),2), round(c(new_aic, new_bic),2))) 
+rownames(result_df) <- c("Model (3.7)", "Model (3.7) with lagged variable")
+ kable(result_df,booktabs=T, row.names = T, col.names = c("AIC","BIC"),
+       caption = "AIC and BIC for the original and modified model.") |>
+     kable_styling(latex_options = c("HOLD_position")) |>
+     kable_classic()
+```
+
+
+
+
+
+# Problem 3.3
+
+In this problem, we explore the difference between a random walk and a trend stationary process.
+
+## Part (a)
+
+Figure \@ref(fig:fig33a) presents four generated series that are random walk with drift of length $n=500$, with $\delta = 0.01$ and $\sigma_w = 1$. The true mean function ($\mu_t = 0.01t$) and fitted regression values ($\hat{x}_t = \hat{\beta}t$) are also shown in each plot. 
+
+
+```{r fig33a, out.width="50%", fig.ncol=2, fig.cap="Four random walk models with drift ($\\delta = 0.01$) and $\\sigma_w = 1$, with fitted regression line (solid red) and true mean function (dotted blue) superimposed.", fig.subcap=c('', '', '', '')}
+
+#---- Problem 3.3 codes
+
+set.seed(125) # seed for reproducibility of results
+
+# repeat this process 4 times
+# par(mfrow=c(2,2))
+for(i in 1:4) {
+    wd <- rnorm(500) + 0.01
+    x <- ts(cumsum(wd))
+    t <- time(x)
+    # fit regression
+    fit1 <- lm(x ~ 0 + t, na.action = NULL)     # with no intercept
+    # plot the data
+    tsplot(x)
+    # add true mean function
+    abline(b=0.01, a=0, lty=2, col=4)
+    # add the fitted line
+    lines(fitted(fit1), col=2)
+}
+```
+
+## Part (b)
+
+Similar to part(a), we generated another four series of length (n=500) that are linear trend plus noise, $y_t = 0.01t + w_t$ and fitted a regression model of the form $y_t = \beta + w_t$ to the resulting data. The plotted data, the true mean function, and the fitted regression line are shown in Figure \@ref(fig:fig33b).
+
+```{r fig33b, out.width="50%", fig.ncol=2, fig.cap="Four linear trend plus noise series with $\\sigma_w = 1$, with regression line (solid red) and true mean function (dotted blue) superimposed.", fig.subcap=c('', '', '', '')}
+
+set.seed(125) # seed for reproducibility of results
+
+# repeat this process 4 times
+# par(mfrow=c(2,2))
+for(i in 1:4) {
+    w <- rnorm(500) 
+    y <- 0.01*t + w
+    t <- seq_along(y)
+    # fit regression
+    fit2 <- lm(y ~ t)
+    summary(fit2)
+    # plot the data
+    tsplot(y, col="gray")
+    # add true mean function
+    abline(b=0.01, a=0, lty=2, col=4, lwd=2)
+    # add the fitted line
+    lines(fitted(fit2), col=2, lwd=1.5) 
+}
+```
+
+
+## Part (c)
+
+
+Below is a comment on the differences between the results of part (a) and part (b).
+
+There is much variation in the results of part (a), with fitted regression line deviating mostly from the true mean function. For some of the series, as the true mean line exhibited an increasing trend, the fitted line behaved in the opposite direction. In contrast, there is much stability in the results of part (b) and the behavior appears the same for all four series. Interestingly, the fitted regression lines mirror the true mean function.
+
+
+# References{-} 
+
+- Robert H. Shumway, & David S. Stoffer. (2019). Time Series: A Data Analysis Approach Using R.
+
+# Appendix: R codes {-} 
+
+
+<!-- all R codes are extracted into this chunk -->
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```
+
+
+
+
+
+
+
+
