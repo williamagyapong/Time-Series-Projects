@@ -1,0 +1,333 @@
+---
+title: 'Homework 1: `r params$hw_title`'
+subtitle: "Time Series Analysis (STAT 6391) "
+author: 
+ - Willliam Ofosu Agyapong^[woagyapong@miners.utep.edu, PhD Data Science, University of Texas at El Paso (UTEP).]
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  bookdown::pdf_document2:
+    fig_caption: true
+    keep_tex: yes
+    latex_engine: xelatex
+    number_sections: true
+    toc: false
+    # toc_depth: 4
+header-includes:
+- \usepackage{amsmath}
+- \usepackage{amssymb}
+- \usepackage{amsfonts}
+- \usepackage{amsthm}
+- \usepackage{esvect}
+- \usepackage{floatrow}
+- \usepackage{float}
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyhf{}
+- \rhead{William O. Agyapong}
+- \lhead{`r params$hw_title`}
+- \cfoot{\thepage}
+- \usepackage{algorithm}
+- \usepackage[noend]{algpseudocode}
+geometry: margin = 1in
+fontsize: 10pt
+params:
+  hw_title: Time Series Elements, Correlation and Stationary Time Series
+# bibliography: references.bib
+link-citations: yes
+linkcolor: blue
+# nocite: |
+ 
+---
+
+
+```{r setup, include=FALSE}
+# Set global options for output rendering
+knitr::opts_chunk$set(eval = T, echo = F, warning = F, message = F, 
+                      fig.pos = "H", out.extra = "", fig.align = "center",
+                      cache = F)
+
+#----------------- Load required packages
+library(stats)
+library(astsa)
+
+  
+#----------------- set the current working directory to the file path
+setwd(dirname(rstudioapi::getSourceEditorContext()$path)) 
+
+
+```
+
+
+
+
+<!-- \noindent\rule{17.5cm}{0.8pt} -->
+
+\newpage
+
+# Problem 1.1
+
+## Part (a) 
+
+The plot below depicts 100 observations from the autogression
+
+$$ x_t = -.9x_{t-2} + w_t.$$
+```{r fig.cap="Autogression with moving average superimposed"}
+
+#------ Problem 1.1
+
+#-- generate 100 observations
+set.seed(123) # seed for reproducible results
+
+# first generate the white noise process with sigma = 1
+wn <- rnorm(100 + 50)[-c(1:50)] # added extra 50 to avoid startup problems from initialization
+
+# next, generate the autoregressive process 
+x <- stats::filter(wn, filter = c(0, -.9), method = "recursive")
+
+# apply the moving average filter
+v <- stats::filter(x,sides = 2, filter = rep(.25, 4), method = "convolution")
+
+tsplot(x, col="darkblue", main = "Autogression with moving average superimposed")
+lines(v, col="darkred")
+legend("bottomright", legend = c("autoression", "moving average"),
+       lty = 1, lwd = 2, bg="white",
+       col = c("darkblue", "darkred"))
+
+```
+
+
+
+## Part (b) 
+
+```{r fig.cap="Signal plus noise with moving average superimposed"}
+
+#-- generate 100 observations
+t <- 1:100
+signal <- 2*cos(2*pi*t/4)
+wn <- rnorm(100) # white noise  with sigma = 1
+# next, generate series
+x <- signal + wn
+
+# apply the moving average filter
+v <- stats::filter(x, sides = 2, filter = rep(.25, 4), method = "convolution")
+
+tsplot(x, col="darkblue", main = "Signal plus noise with moving average superimposed")
+lines(v, col="darkred")
+legend("topleft", legend = c("signal plus noise", "moving average"),
+       lty = 1, lwd = 2, bg="white",
+       col = c("darkblue", "darkred"))
+```
+
+
+## Part (c) 
+
+```{r fig.cap="Log of Johson \\& Johnson Quarterly Earnings with moving average superimposed"}
+#-- generate 100 observations
+
+x <- log(astsa::jj)
+
+# apply the moving average filter
+v <- stats::filter(x, sides = 2, filter = rep(.25, 4), method = "convolution")
+
+tsplot(x, col="darkblue", main = "Log of Quarterly Earnings with moving average")
+lines(v, col="darkred")
+legend("topleft", legend = c("JJ quarterly earnings", "moving average"),
+       lty = 1, lwd = 2, bg="white",
+       col = c("darkblue", "darkred"))
+```
+
+
+## Part (d): What is seasonal adjustment?
+
+Seasonal adjustment is a statistical technique used to remove the seasonal component of a time series in order to better understand its underlying trend and cyclical patterns, which allows for more meaningful comparisons of economic conditions from period to period. This process usually involves decomposing a time series into four separate components: (1) the trend-cycle, (2) seasonal effects, (3) other calendar effects such as trading days and moving holidays, and (4) the irregular component. The seasonally adjusted series is the original time series with the estimated seasonal and calendar effects removed. The seasonally adjusted data  Smoothing techniques such as the moving average is a useful method for discovering seasonal components.
+
+
+
+<!-- These seasonal and calendar effects can obscure “true” underlying movements in the data series related to the business cycle, or to non-seasonal events, such as strikes or unanticipated disruptions in production. Consequently, seasonal adjustment techniques that remove the effect of seasonal and calendar influences from the original data can sharpen the extent to which a time series can be used to evaluate meaningful changes in economic conditions over time. -->
+
+
+
+## Part (e): Conclusion
+
+The main take away for me from this exercise is that applying moving average to the series smoothed the data, leading to much reduction in variance and removal of fast oscillations. 
+
+
+
+
+# Problem 1.2
+
+## Part (a)
+
+```{r fig.cap="Seismic recordings"}
+
+#---------- Problem 1.2
+
+# Part (a)
+par(mfrow=2:1)
+# plot the fifth earthquake
+tsplot(EQ5, main = "Fifth earthquake", col="darkblue", ylab = "")
+# plot the sixth explossion
+tsplot(EXP6, main = "Sixth explossion", col = "darkblue", ylab = "")
+
+```
+
+
+## Part (b)
+
+```{r fig.cap="Comparing seismic recordings of earthquake and explossions"}
+
+# Part (b)
+
+tsplot(EQ5, main = "Seismic recordings", col="darkblue", ylab = "")
+lines(EXP6, col="darkred")
+legend("topleft", col = c("darkblue", "darkred"), lty = 1, lwd = 2, bg="white",
+       legend = c("Fifth earthquake", "Sixth explosion"))
+
+
+```
+
+## Part (c): In what way are the earthquake and explosion series different?
+
+We can see from the plots that, the explosion time series have sharp, high-frequency signals that decay rapidly, while the earthquake series exhibits low-frequency signals that last longer (much slower decay).
+
+
+# Problem 1.3
+
+
+## Part (a)
+
+```{r fig.cap="Nine series generated from random walks without drift"}
+
+
+#---------- Problem 1.3
+
+# Part (b)
+set.seed(123)
+
+par(mfrow=c(3,3))
+
+for (i in 1:9) {
+    wn <- rnorm(500); x <- cumsum(wn) # random walk without drift
+    # wnd <- wn + 1; xd <- cumsum(wnd) # random walk with drift
+    
+    tsplot(x, main = paste("Random walk", i), col = 2, ylab = "")
+    # abline(a=0, b=1, col=4, lty=2) # plot the drift
+    # lines(x, col="darkred")
+    abline(h=0, lty=2)
+}
+
+
+```
+
+## Part (b)
+
+```{r fig.cap="Nine moving average series"}
+# Part (b)
+
+set.seed(123)
+
+par(mfrow=c(3,3)) # for multiple plot
+
+for (i in 1:9) {
+    wn <- rnorm(500)
+    v <- filter(wn, sides = 2, filter = rep(1/3, 3), method = "convolution")
+    tsplot(v, main = paste("Moving average",i), col = 11, ylab = "")
+    abline(h=0, lty=2)
+}
+
+```
+
+## Part (c) 
+
+The main differences between the results of part (a) and part (b)  are summarized as follows: 
+
+The random walk series in part (a) are too erratic (more variable) to the extent that one cannot observe the same behavior or pattern in the nine series apart from the fact that they almost always start at zero and assume highly unpredictable values thereafter over time. On the other hand, the moving average series in part (b) exhibit the opposite characteristics; they are all centered around zero (0) and remained quite stable over time with relatively low variability (all are within reasonable range).  
+
+
+
+# Problem 1.4
+
+## Part (a)
+
+The plot of seasonally adjusted GDP in the figure below can be compared to the random ***walk with drift*** model as depicted in Figure 1.10 of Section 1.3 in (Shumway and Stoffe, 2019). We notice that, while both exhibit an upward trend which is not linear, the plot here is much smoother. 
+
+
+```{r fig.cap="Seasonally adjusted quarterly U.S. GDP from 1947-I to 2018-III."}
+
+
+#---------- Promblem 1.4
+
+# Part (a)
+tsplot(gdp, col = 4, main = "Seasonally adjusted quarterly U.S. GDP")
+
+```
+
+
+## Part (b)
+
+Figure 1.4 of Shumway and Stoffe (2019) is reproduced as follows. Interestingly, the two methods of calculating growth rate produce identical if not the same results as we see the square characters and the x characters overlapping for almost all the time points. Roughly speaking, there is no difference between the end results of the two methods. 
+
+
+
+```{r fig.cap="US GDP growth rate calculated using logs (purple square) and actual values (green x)"}
+
+# Part (b)
+tsplot(diff(log(gdp)), type = "o", pch=5, col = "purple", ylab = "GDP Growth")
+points(diff(gdp)/lag(gdp, -1), pch=4, col="green")
+
+```
+
+
+## Part (c)
+
+From the above figure, it is clear that the behavior of the growth in U.S GDP can best be modeled by an ***autoregression*** model. 
+
+
+# Problem 2.2
+
+Please see solution in the attachment.
+
+```{r}
+# xfun::embed_file("problem 2.2.pdf")
+```
+
+
+<!-- Consider the time series -->
+
+<!-- $$ X_t = \beta_0 + \beta_1t + w_t,$$ -->
+<!-- where $\beta_0$, and $\beta_1$ are regression coefficients, and $w_t$ is a white noise process with variance $\sigma_w^2$. -->
+
+<!-- (a) We wish to determine whether $x_t$ is stationary. For this, it suffices to the derive the mean and covariance functions for $x_t$. -->
+
+<!-- For the mean function, we have that  -->
+
+<!-- $$\begin{align} -->
+<!--     \mu_{x,t} = E[x_t] =& E[\beta_0 + \beta_1t + w_t] \\ -->
+<!--     =& \beta_0 + \beta_1t + E[w_t]\\ -->
+<!--     =& \beta_0 + \beta_1t, \qquad \text{ depends on } t. -->
+<!-- \end{align}$$ -->
+
+
+
+
+# Appendix {-} 
+
+
+
+## A: R codes {-}
+
+<!-- all R codes are extracted into this chunk -->
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```
+
+# References{-} 
+
+- Robert H. Shumway, & David S. Stoffer. (2019). Time Series: A Data Analysis Approach Using R
+
+- Seasonally adjusted data - Frequently asked questions (Statistics Canada). Accessed on 09/07/2023 at [https://www150.statcan.gc.ca/n1/dai-quo/btd-add/btd-add-eng.htm#](https://www150.statcan.gc.ca/n1/dai-quo/btd-add/btd-add-eng.htm#)
+
+
+
+
+
